@@ -1,0 +1,22 @@
+---
+import type { SeriesInfo } from '~/lib/posts';
+
+interface Props {
+  series: SeriesInfo & { count: number };
+}
+const { series } = Astro.props;
+---
+
+<a href={'/series/' + series.id} class="card card-hover group block p-7" data-reveal>
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <p class="kicker mb-3">Series · {series.count}편</p>
+      <h3 class="font-display text-xl font-bold leading-snug tracking-tight transition-colors group-hover:text-accent">
+        {series.title}
+      </h3>
+      <p class="mt-3 line-clamp-2 text-sm leading-relaxed text-soft">{series.description}</p>
+    </div>
+    <span class="shrink-0 font-mono text-2xl text-accent opacity-60 transition-transform group-hover:translate-x-1" aria-hidden>→</span>
+  </div>
+  <div class="series-bar mt-6"><div style={'width:' + Math.min(100, (series.count / 24) * 100) + '%'}></div></div>
+</a>

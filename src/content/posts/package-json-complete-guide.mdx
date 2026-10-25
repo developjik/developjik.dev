@@ -1,0 +1,823 @@
+---
+title: 'package.json 완벽 가이드'
+description: 'Node.js 프로젝트의 핵심 설정 파일 package.json의 구조와 주요 필드를 체계적으로 정리한 가이드입니다. 의존성 관리, 버전 지정 방식, 스크립트 설정, 베스트 프랙티스를 포함합니다.'
+date: '2026-01-20'
+tags:
+  - 'Node.js'
+  - 'package.json'
+  - 'npm'
+  - '의존성 관리'
+  - 'Semantic Versioning'
+  - 'Web Development'
+  - '가이드'
+---
+
+# package.json 완벽 가이드
+
+## 📋 문서 분석
+
+- **문서 유형**: Concept Explanation (개념 설명)
+- **대상 독자**: 중급 프론트엔드 개발자
+- **주요 목표**: package.json의 구조와 주요 필드를 이해하고 실무에 적용
+- **예상 소요 시간**: 20-30분
+
+---
+
+## 개요
+
+package.json은 Node.js 프로젝트의 메타데이터를 정의하는 핵심 설정 파일입니다. 프로젝트 이름, 버전, 의존성, 스크립트 등 프로젝트 실행에 필요한 모든 정보를 담고 있습니다.
+
+이 가이드에서는 package.json의 주요 필드와 실무에서 자주 사용하는 설정 방법을 알아봅니다. 프론트엔드 프로젝트와 모노레포 환경에서의 활용 예제를 통해 즉시 프로젝트에 적용할 수 있습니다.
+
+---
+
+## 배경
+
+### 왜 필요한가?
+
+Node.js 생태계에서 프로젝트를 관리하려면 다음 정보들이 필요합니다:
+
+- 어떤 외부 라이브러리를 사용하는가?
+- 각 라이브러리의 버전은 무엇인가?
+- 프로젝트를 어떻게 빌드하고 실행하는가?
+- 다른 개발자가 프로젝트를 설치할 때 무엇이 필요한가?
+
+package.json은 이러한 모든 정보를 하나의 파일에 표준화된 형식으로 관리합니다.
+
+### 등장 이전의 방식
+
+package.json이 없던 시절에는:
+
+- 의존성을 수동으로 다운로드하고 관리
+- 프로젝트마다 다른 폴더 구조와 명령어
+- 팀원 간 환경 차이로 인한 "내 컴퓨터에서는 잘 되는데요" 문제
+- 버전 관리의 어려움
+
+---
+
+## 핵심 구조
+
+### 기본 구조
+
+```json
+{
+  "name": "my-app",
+  "version": "1.0.0",
+  "description": "My awesome application",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "build": "webpack --mode production",
+    "test": "jest"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "webpack": "^5.88.0",
+    "jest": "^29.6.0"
+  }
+}
+```
+
+---
+
+## 필수 필드
+
+### 1. name (프로젝트 이름)
+
+프로젝트의 고유한 이름입니다.
+
+**규칙**:
+
+- 소문자만 사용
+- 공백 없음 (하이픈 또는 언더스코어 사용)
+- 214자 이하
+- URL-safe 문자만 사용
+
+```json
+{
+  "name": "my-awesome-app",
+  "name": "@myorg/shared-components"  // 스코프 패키지
+}
+```
+
+**실무 팁**: 모노레포에서는 스코프(`@myorg`)를 사용하여 패키지를 그룹화하세요.
+
+### 2. version (버전)
+
+프로젝트의 현재 버전을 나타냅니다. [Semantic Versioning](https://semver.org/) 형식을 따릅니다.
+
+**형식**: `MAJOR.MINOR.PATCH`
+
+```json
+{
+  "version": "1.0.0"
+}
+```
+
+**버전 규칙**:
+
+- `MAJOR`: 기존 API와 호환되지 않는 변경
+- `MINOR`: 기존 API와 호환되는 새 기능 추가
+- `PATCH`: 기존 API와 호환되는 버그 수정
+
+**예시**:
+
+```
+1.0.0 → 1.0.1  (버그 수정)
+1.0.1 → 1.1.0  (새 기능 추가)
+1.1.0 → 2.0.0  (Breaking Change)
+```
+
+---
+
+## 의존성 관리
+
+### dependencies vs devDependencies
+
+#### dependencies
+
+프로덕션 환경에서 필요한 패키지입니다.
+
+```json
+{
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "axios": "^1.4.0",
+    "zustand": "^4.3.0"
+  }
+}
+```
+
+**언제 사용**: 애플리케이션이 실행될 때 반드시 필요한 라이브러리
+
+#### devDependencies
+
+개발 환경에서만 필요한 패키지입니다.
+
+```json
+{
+  "devDependencies": {
+    "typescript": "^5.1.0",
+    "eslint": "^8.45.0",
+    "jest": "^29.6.0",
+    "webpack": "^5.88.0"
+  }
+}
+```
+
+**언제 사용**: 빌드, 테스트, 린팅 등 개발 과정에만 필요한 도구
+
+#### peerDependencies
+
+호스트 프로젝트가 제공해야 하는 패키지입니다.
+
+```json
+{
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  }
+}
+```
+
+**언제 사용**: 라이브러리를 개발할 때, 사용자 프로젝트가 특정 패키지를 설치하도록 요구
+
+### 버전 지정 방식
+
+```json
+{
+  "dependencies": {
+    "react": "18.2.0",        // 정확한 버전
+    "react-dom": "^18.2.0",   // 18.x.x 중 최신 (MINOR, PATCH 업데이트 허용)
+    "axios": "~1.4.0",        // 1.4.x 중 최신 (PATCH 업데이트만 허용)
+    "lodash": "*",            // 최신 버전 (권장하지 않음)
+    "moment": ">=2.29.0"      // 2.29.0 이상
+  }
+}
+```
+
+**실무 권장사항**:
+
+- `^` (캐럿): 가장 일반적, MINOR 버전까지 자동 업데이트
+- `~` (틸드): 보수적, PATCH 버전만 자동 업데이트
+- 정확한 버전: 매우 중요한 패키지 또는 버전 충돌이 있을 때
+
+---
+
+## Scripts (스크립트)
+
+프로젝트에서 자주 실행하는 명령어를 정의합니다.
+
+### 기본 스크립트
+
+```json
+{
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --ext .ts,.tsx",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "type-check": "tsc --noEmit"
+  }
+}
+```
+
+**실행 방법**:
+
+```bash
+npm run dev
+npm run build
+npm test  # npm run test와 동일
+```
+
+### 실무 예제: Next.js + TypeScript 프로젝트
+
+```json
+{
+  "scripts": {
+    // 개발
+    "dev": "next dev",
+    "dev:turbo": "next dev --turbo",
+
+    // 빌드
+    "build": "next build",
+    "build:analyze": "ANALYZE=true next build",
+
+    // 실행
+    "start": "next start",
+    "start:prod": "NODE_ENV=production next start",
+
+    // 코드 품질
+    "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "format": "prettier --write .",
+    "type-check": "tsc --noEmit",
+
+    // 테스트
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+
+    // 통합
+    "validate": "npm run type-check && npm run lint && npm run test",
+    "prepare": "husky install"
+  }
+}
+```
+
+### Pre/Post 스크립트
+
+특정 스크립트 실행 전후에 자동으로 실행되는 스크립트입니다.
+
+```json
+{
+  "scripts": {
+    "prebuild": "rimraf dist",           // build 전에 실행
+    "build": "webpack",
+    "postbuild": "npm run test",         // build 후에 실행
+
+    "pretest": "npm run lint",           // test 전에 실행
+    "test": "jest"
+  }
+}
+```
+
+**실행 순서**:
+
+```bash
+npm run build
+# 1. prebuild 실행
+# 2. build 실행
+# 3. postbuild 실행
+```
+
+---
+
+## 모노레포 설정
+
+### Turborepo 예제
+
+```json
+{
+  "name": "my-monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "turbo": "^1.10.0"
+  }
+}
+```
+
+### 워크스페이스 패키지 예제
+
+**apps/web/package.json**:
+
+```json
+{
+  "name": "@myorg/web",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "14.0.0",
+    "react": "^18.2.0",
+    "@myorg/ui": "*",           // 로컬 패키지 참조
+    "@myorg/utils": "workspace:*"
+  }
+}
+```
+
+**packages/ui/package.json**:
+
+```json
+{
+  "name": "@myorg/ui",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./button": {
+      "import": "./dist/button.js",
+      "types": "./dist/button.d.ts"
+    }
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
+  }
+}
+```
+
+---
+
+## 주요 설정 필드
+
+### type (모듈 시스템)
+
+```json
+{
+  "type": "module"  // ESM 사용
+}
+```
+
+**옵션**:
+
+- `"module"`: ESM (import/export) 사용
+- `"commonjs"`: CommonJS (require/module.exports) 사용 (기본값)
+
+### engines (Node.js 버전 제한)
+
+```json
+{
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
+```
+
+**효과**: 지정된 버전 미만에서 설치 시 경고 또는 오류 발생
+
+### browserslist (지원 브라우저)
+
+```json
+{
+  "browserslist": [
+    ">0.2%",
+    "not dead",
+    "not op_mini all"
+  ]
+}
+```
+
+**용도**: Babel, PostCSS 등의 트랜스파일러가 타겟 브라우저를 결정
+
+### exports (패키지 진입점)
+
+```json
+{
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./utils": {
+      "import": "./dist/utils.js",
+      "types": "./dist/utils.d.ts"
+    }
+  }
+}
+```
+
+**장점**:
+
+- 명시적인 진입점 제어
+- ESM/CommonJS 동시 지원
+- TypeScript 타입 정의 포함
+
+---
+
+## 실무 예제
+
+### 1. Next.js 프로젝트
+
+```json
+{
+  "name": "my-nextjs-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "14.0.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.0.4",
+    "postcss": "^8",
+    "tailwindcss": "^3.3.0",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  }
+}
+```
+
+### 2. 라이브러리 패키지
+
+```json
+{
+  "name": "@myorg/shared-components",
+  "version": "1.2.3",
+  "description": "Shared React components for our projects",
+  "main": "./dist/index.js",
+  "module": "./dist/index.esm.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "lint": "eslint src",
+    "test": "jest"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "react": "^18.2.0",
+    "tsup": "^7.2.0",
+    "typescript": "^5.1.0"
+  },
+  "keywords": [
+    "react",
+    "components",
+    "ui"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/myorg/shared-components.git"
+  },
+  "license": "MIT"
+}
+```
+
+### 3. Turborepo 루트 설정
+
+```json
+{
+  "name": "my-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "turbo run build && changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.26.2",
+    "eslint": "^8.48.0",
+    "prettier": "^3.0.3",
+    "turbo": "^1.10.16",
+    "typescript": "^5.2.2"
+  },
+  "packageManager": "npm@10.1.0",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+```
+
+---
+
+## 고급 설정
+
+### 1. 조건부 익스포트 (Conditional Exports)
+
+```json
+{
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.cjs.js",
+      "default": "./dist/index.js"
+    },
+    "./server": {
+      "node": "./dist/server.js",
+      "default": "./dist/server.browser.js"
+    }
+  }
+}
+```
+
+### 2. 선택적 의존성 (Optional Dependencies)
+
+```json
+{
+  "optionalDependencies": {
+    "fsevents": "^2.3.2"  // macOS에서만 필요
+  }
+}
+```
+
+### 3. 번들 크기 관리
+
+```json
+{
+  "sideEffects": false  // Tree-shaking 최적화
+}
+```
+
+또는 특정 파일만 사이드 이펙트 포함:
+
+```json
+{
+  "sideEffects": [
+    "*.css",
+    "*.scss"
+  ]
+}
+```
+
+---
+
+## 베스트 프랙티스
+
+### 1. 버전 관리
+
+✅ **DO**:
+
+```json
+{
+  "dependencies": {
+    "react": "^18.2.0",      // MINOR 업데이트 허용
+    "next": "14.0.4"         // 정확한 버전 (중요한 프레임워크)
+  }
+}
+```
+
+❌ **DON'T**:
+
+```json
+{
+  "dependencies": {
+    "react": "*",            // 예측 불가능한 업데이트
+    "lodash": "latest"       // 명시적이지 않음
+  }
+}
+```
+
+### 2. 스크립트 명명
+
+✅ **DO**:
+
+```json
+{
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  }
+}
+```
+
+**원칙**:
+
+- 일관된 명명 규칙
+- 콜론(`:`)으로 변형 구분
+- 표준 명령어 사용 (dev, build, start, test, lint)
+
+### 3. Private 플래그
+
+npm 레지스트리에 실수로 배포되지 않도록:
+
+```json
+{
+  "private": true
+}
+```
+
+### 4. 파일 포함/제외
+
+배포 시 포함할 파일 명시:
+
+```json
+{
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
+}
+```
+
+---
+
+## 트러블슈팅
+
+### 문제 1: 의존성 설치 실패
+
+**증상**:
+
+```
+npm ERR! code ERESOLVE
+npm ERR! ERESOLVE unable to resolve dependency tree
+```
+
+**원인**: 패키지 간 버전 충돌
+
+**해결**:
+
+```bash
+# 1. 캐시 삭제
+npm cache clean --force
+
+# 2. node_modules와 lock 파일 삭제
+rm -rf node_modules package-lock.json
+
+# 3. 재설치
+npm install
+
+# 4. 여전히 실패하면 --legacy-peer-deps 사용
+npm install --legacy-peer-deps
+```
+
+### 문제 2: 스크립트 실행 안 됨
+
+**증상**:
+
+```
+npm ERR! missing script: dev
+```
+
+**원인**: scripts 필드에 해당 명령어 없음
+
+**해결**:
+
+```json
+{
+  "scripts": {
+    "dev": "next dev"  // 누락된 스크립트 추가
+  }
+}
+```
+
+### 문제 3: 잘못된 Node.js 버전
+
+**증상**:
+
+```
+error next@14.0.0: The engine "node" is incompatible with this module.
+```
+
+**원인**: 프로젝트가 요구하는 Node.js 버전과 현재 버전 불일치
+
+**해결**:
+
+```bash
+# 1. nvm 사용 (권장)
+nvm install 18
+nvm use 18
+
+# 2. engines 필드 확인
+cat package.json | grep -A 2 "engines"
+```
+
+---
+
+## 체크리스트
+
+프로젝트 시작 시:
+
+- [ ] `name`과 `version` 설정
+- [ ] `private: true` 설정 (앱인 경우)
+- [ ] `engines` 필드로 Node.js 버전 명시
+- [ ] 기본 스크립트 추가 (dev, build, start, test, lint)
+- [ ] TypeScript 사용 시 `types` 또는 `@types/*` 설치
+
+라이브러리 개발 시:
+
+- [ ] `main`, `module`, `types` 필드 설정
+- [ ] `exports` 필드로 진입점 명확히
+- [ ] `peerDependencies` 설정
+- [ ] `files` 필드로 배포 파일 명시
+- [ ] `sideEffects` 설정으로 Tree-shaking 지원
+
+모노레포 설정 시:
+
+- [ ] 루트에 `workspaces` 설정
+- [ ] 각 패키지에 `name` 필드 (스코프 사용)
+- [ ] 워크스페이스 간 의존성 `workspace:*` 사용
+- [ ] 공통 devDependencies는 루트에 배치
+
+---
+
+## 참고 자료
+
+### 공식 문서
+
+- [npm package.json 공식 문서](https://docs.npmjs.com/cli/v10/configuring-npm/package-json)
+- [Node.js Packages 문서](https://nodejs.org/api/packages.html)
+
+### 도구
+
+- [npm semver calculator](https://semver.npmjs.com/)
+- [package.json validator](https://package-json-validator.com/)
+
+### 관련 가이드
+
+- [Semantic Versioning](https://semver.org/)
+- [npm workspaces](https://docs.npmjs.com/cli/v10/using-npm/workspaces)
+
+---
+
+## 다음 단계
+
+package.json을 이해했다면:
+
+1. **실습**: 새 프로젝트를 만들고 package.json 직접 작성해보기
+2. **탐구**: 인기 오픈소스 프로젝트의 package.json 분석하기
+3. **심화**: 모노레포 설정으로 여러 패키지 관리하기
+4. **최적화**: 번들 크기와 의존성 최적화하기
+
+---
+
+**작성일**: 2026-01-20
+**문서 버전**: 1.0.0

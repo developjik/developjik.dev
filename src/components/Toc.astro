@@ -1,0 +1,23 @@
+---
+import type { MarkdownHeading } from 'astro';
+
+interface Props {
+  headings: MarkdownHeading[];
+}
+const { headings } = Astro.props;
+const visible = headings.filter((h) => h.depth === 2 || h.depth === 3);
+---
+
+{visible.length > 0 && (
+  <nav aria-label="목차" class="hidden xl:block">
+    <p class="kicker mb-4">On this page</p>
+    <ul class="space-y-2.5 border-l border-line pl-1">
+      {visible.map((h) => (
+        <li>
+          <a href={'#' + h.slug} class:list={['toc-link', h.depth === 3 && 'lv3']} data-toc-link>{h.text}</a>
+        </li>
+      ))}
+    </ul>
+    <a href="#top" class="mt-5 inline-block font-mono text-xs text-faint transition-colors hover:text-accent">↑ 맨 위로</a>
+  </nav>
+)}

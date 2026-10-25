@@ -1,0 +1,36 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import PostRow from '~/components/PostRow.astro';
+import { getAllPosts, groupByYear } from '~/lib/posts';
+
+const posts = await getAllPosts();
+const years = groupByYear(posts);
+const first = posts[posts.length - 1];
+const last = posts[0];
+---
+
+<BaseLayout title="아카이브" description="developjik 블로그 전체 글 연표 — 2024년부터 지금까지.">
+  <div class="shell py-14 md:py-20">
+    <header class="mb-14" data-reveal>
+      <p class="kicker mb-3">Archive</p>
+      <h1 class="font-display text-4xl font-bold tracking-tight md:text-5xl">아카이브</h1>
+      <p class="mt-4 font-mono text-sm text-faint">
+        {posts.length} posts · {first?.data.date.getFullYear()} — {last?.data.date.getFullYear()}
+      </p>
+    </header>
+
+    <div class="space-y-16">
+      {years.map(([year, list]) => (
+        <section class="grid gap-8 md:grid-cols-[10rem_minmax(0,1fr)]" data-reveal>
+          <div class="timeline-year">
+            <p class="font-display text-4xl font-bold tracking-tight" style="color: var(--accent); opacity:.9">{year}</p>
+            <p class="mt-1.5 font-mono text-xs text-faint tabular">{list.length}편</p>
+          </div>
+          <div class="timeline-rail ml-1">
+            {list.map((p) => <PostRow post={p} />)}
+          </div>
+        </section>
+      ))}
+    </div>
+  </div>
+</BaseLayout>

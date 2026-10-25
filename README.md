@@ -1,172 +1,88 @@
-# Nextra 블로그 (개인 기술 블로그)
+# developjik.dev — 에이전트 시대의 프론트엔드 블로그
 
-[Next.js](https://nextjs.org)와 [Nextra](https://nextra.site)로 구축된 현대적인 개인 블로그입니다. MDX를 사용해 콘텐츠를 작성하고, Giscus를 통해 댓글 기능을 제공합니다.
+Astro 5 + Tailwind CSS 4 + MDX로 구축된 정적 개발자 블로그.
+GitHub 프로필과 통일된 브랜드(#0e1116 / #4d8dff), Pretendard + Space Grotesk + JetBrains Mono 타이포그래피.
 
-## 🚀 주요 기능
+## 스택
 
-- **Nextra v4.6.1**: MDX 기반의 빠른 정적 사이트 생성
-- **Next.js 16**: 최신 App Router 아키텍처
-- **Giscus 댓글**: GitHub Discussions 기반의 댓글 시스템
-- **다크/라이트 모드**: 자동 테마 전환 지원
-- **검색 기능**: Pagefind 기반의 전문 검색
-- **한글 최적화**: 완벽한 한국어 지원
-- **반응형 디자인**: 모든 기기에서 최적화된 경험
+- **Astro 5** — 콘텐츠 컬렉션(glob loader) + 정적 생성 (241 pages)
+- **MDX** — 포스트 60편 (frontmatter: title / date / description / tags)
+- **Tailwind CSS 4** — CSS-first 토큰 디자인 시스템 (src/styles/global.css)
+- **Pagefind** — 전문 검색 + ⌘K 커맨드 팔레트
+- **Shiki** — 코드 하이라이팅 (github-light / github-dark-dimmed 듀얼 테마)
+- **satori + sharp** — 포스트별 OG 이미지 자동 생성 (1200×630)
+- **Giscus** — GitHub Discussions 댓글 (환경변수로 활성화)
 
-## 🛠️ 개발 환경 설정
+## 주요 기능
 
-### 1. 의존성 설치
+- 다크/라이트 테마 (system 우선, ?theme= 파라미터 지원, FOUC 없음)
+- 시리즈 페이지 — frontend-ai-* 24편을 '이직에 바로 먹히는 프론트엔드 AI 실무'로 자동 그룹핑 (EP 넘버링, 이전/다음 편, 진행 바)
+- ⌘K / Ctrl+K / / 커맨드 팔레트 (pagefind 전문 검색, 키보드 내비게이션)
+- 전체 글 페이지 실시간 필터 (텍스트 + 태그 칩)
+- 아카이브 타임라인, 태그 인덱스, 스크롤 리빌, 읽기 진행 바, TOC 액티브 트래킹
+- 뷰 트랜지션(Astro ClientRouter), 모바일 완전 대응
+- RSS(/rss.xml), sitemap, robots, JSON-LD(BlogPosting/WebSite/Blog)
+
+## 개발
 
 ```bash
 pnpm install
+pnpm dev        # http://localhost:4321
+pnpm build      # dist/ 생성 (pagefind 인덱싱 포함)
+pnpm preview    # 프로덕션 프리뷰
+pnpm check      # biome + astro check
 ```
 
-### 2. 개발 서버 시작
+## 포스트 작성
 
-```bash
-pnpm dev
-```
-
-[http://localhost:3000](http://localhost:3000)에서 블로그를 확인하세요.
-
-### 3. 빌드 및 배포
-
-```bash
-# 프로덕션 빌드
-pnpm build
-
-# 프로덕션 서버 시작
-pnpm start
-```
-
-## 📝 블로그 포스트 작성
-
-새 포스트는 `app/posts/[slug]/page.mdx` 형식으로 작성합니다:
-
-```bash
-mkdir app/posts/my-new-post
-touch app/posts/my-new-post/page.mdx
-```
-
-`page.mdx` 파일 구조:
+src/content/posts/<slug>.mdx 형식:
 
 ```mdx
 ---
 title: '포스트 제목'
-description: '간단한 설명'
+date: '2026-01-23'
+description: '한 줄 요약'
 tags: ['태그1', '태그2']
 ---
 
-# 여기에 콘텐츠 작성
-
-내용은 MDX 형식으로 작성합니다...
+본문…
 ```
 
-## 💬 댓글 시스템 설정 (Giscus)
+- slug이 frontend-ai- 로 시작하면 시리즈에 자동 포함
+- OG 이미지(/og/<slug>.png)는 빌드 시 자동 생성
 
-댓글 기능을 활성화하려면 다음 단계를 따르세요:
+## 댓글(Giscus) 설정
 
-### 1단계: GitHub 저장소 설정
-
-1. [GitHub 저장소 설정](https://github.com/developjik/nextra-blog/settings/features)에서 **Discussions** 기능 활성화
-2. [Giscus 앱 설치](https://github.com/apps/giscus) 후 저장소 권한 부여
-
-### 2단계: Giscus 설정 생성
-
-1. [Giscus 설정 페이지](https://giscus.app/ko) 방문
-2. 저장소 선택: `developjik/nextra-blog`
-3. 페이지 ↔ Discussion 매핑: `pathname` 선택
-4. 카테고리: `General` 또는 `Announcements` 선택
-5. 테마: `preferred_color_scheme` (자동 다크/라이트 모드)
-6. 언어: `한국어` 선택
-
-### 3단계: 환경 변수 설정
-
-`.env.local` 파일에 Giscus 설정값 추가:
+.env 파일:
 
 ```bash
-# .env.local
-NEXT_PUBLIC_ENABLE_COMMENTS=true
-NEXT_PUBLIC_GISCUS_REPO_ID=R_kgDOHyour-repo-id
-NEXT_PUBLIC_GISCUS_CATEGORY_ID=DIC_kwDOHyour-category-id
+PUBLIC_ENABLE_COMMENTS=true
+PUBLIC_GISCUS_REPO=developjik/nextra-blog
+PUBLIC_GISCUS_REPO_ID=R_kgDO...
+PUBLIC_GISCUS_CATEGORY_ID=DIC_kwDO...
 ```
 
-> ⚠️ **중요**: `.env.local` 파일은 git에 커밋되지 않으니 안전하게 저장하세요.
->
-> 💡 **타입 안전성**: 이 프로젝트는 `t3-oss/env-nextjs`를 사용하여 타입 안전한 환경 변수 관리를 제공합니다. 환경 변수가 누락되거나 잘못된 타입일 경우 빌드 타임에 오류가 발생하여 실수를 방지합니다.
+값이 없으면 댓글 섹션은 렌더링되지 않습니다.
 
-## 🎨 코드 품질 관리
-
-이 프로젝트는 Biome를 사용하여 코드 품질을 관리합니다:
-
-```bash
-# 코드 검사 및 자동 수정
-pnpm check:fix
-
-# 개별 실행
-pnpm lint        # 린팅만 실행
-pnpm format      # 포맷팅만 실행
-```
-
-## 📁 프로젝트 구조
+## 프로젝트 구조
 
 ```
-app/
-├── page.mdx              # 홈페이지
-├── layout.tsx            # 루트 레이아웃
-├── posts/
-│   ├── [slug]/page.mdx   # 블로그 포스트
-│   ├── layout.tsx        # 포스트 레이아웃
-│   └── Comments.tsx      # Giscus 댓글 컴포넌트 (타입 안전한 환경 변수 사용)
-├── about/page.tsx        # 소개 페이지
-├── tags/page.mdx         # 태그 목록
-└── robots.txt/route.ts   # robots.txt 생성 (환경 변수 사용)
-
-_components/
-├── Navbar.tsx           # 내비게이션 바
-├── Footer.tsx           # 푸터
-└── index.ts             # 컴포넌트 export
-
-env.ts                   # 타입 안전한 환경 변수 스키마 (t3-oss/env-nextjs)
+src/
+├── content.config.ts      # zod 스키마 (posts 컬렉션)
+├── content/posts/         # MDX 포스트 60편
+├── consts.ts              # 사이트 설정, 대표 글
+├── lib/posts.ts           # 쿼리·시리즈·태그·읽기시간 유틸
+├── styles/global.css      # 디자인 토큰 + 컴포넌트 CSS
+├── layouts/               # BaseLayout
+├── components/            # Header/Footer/CommandPalette/PostCard/Toc/Giscus…
+└── pages/                 # index, posts, tags, series, archives, about, 404, rss, og
 ```
 
-## 🚀 배포
+## 배포
 
-### Vercel에 배포 (권장)
-
-1. GitHub 저장소를 Vercel에 연결
-2. 빌드 명령어: `pnpm build`
-3. 환경 변수 설정:
-   - `NEXT_PUBLIC_SITE_URL`: 배포된 사이트 URL
-   - Giscus 관련 환경 변수들
-
-### 다른 플랫폼에 배포
-
-정적 사이트로 빌드되므로 Netlify, Cloudflare Pages 등 어떤 호스팅 서비스에도 배포할 수 있습니다.
-
-## 🔧 유용한 명령어
-
-```bash
-# 개발 관련
-pnpm dev                 # 개발 서버
-pnpm build               # 프로덕션 빌드
-pnpm start               # 프로덕션 서버
-
-# 코드 품질
-pnpm check               # 코드 검사
-pnpm check:fix           # 자동 수정
-pnpm format              # 코드 포맷팅
-
-# 유틸리티
-pnpm why [package]       # 의존성 확인
-```
-
-## 📚 추가 정보
-
-- [Nextra 문서](https://nextra.site/docs)
-- [Giscus 가이드](https://github.com/giscus/giscus/blob/main/README.ko.md)
-- [Next.js 문서](https://nextjs.org/docs)
-- [t3-oss/env-nextjs 문서](https://env.t3.gg/docs/getting-started) - 타입 안전한 환경 변수 관리
+완전 정적(dist/)이므로 Vercel / Netlify / Cloudflare Pages 어디든 가능.
+사이트 URL은 astro.config.mjs의 site과 src/consts.ts의 SITE.url로 관리.
 
 ## 라이선스
 
-MIT License
+MIT

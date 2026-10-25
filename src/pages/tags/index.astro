@@ -1,0 +1,28 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { getAllPosts, tagCounts, tagSlug } from '~/lib/posts';
+
+const posts = await getAllPosts();
+const tags = tagCounts(posts);
+---
+
+<BaseLayout title="태그" description="developjik 블로그의 모든 태그 — 주제별로 글 탐색하기.">
+  <div class="shell py-14 md:py-20">
+    <header class="mb-12" data-reveal>
+      <p class="kicker mb-3">Tags</p>
+      <h1 class="font-display text-4xl font-bold tracking-tight md:text-5xl">태그</h1>
+      <p class="mt-4 max-w-lg text-[0.95rem] leading-relaxed text-soft">
+        전체 <span class="tabular font-mono text-accent">{tags.length}</span>개 태그. 글의 개수가 많은 순서입니다.
+      </p>
+    </header>
+
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-reveal>
+      {tags.map(([tag, count]) => (
+        <a href={'/tags/' + tagSlug(tag)} class="card card-hover group flex items-center justify-between gap-3 px-5 py-4">
+          <span class="truncate font-[550] transition-colors group-hover:text-accent">#{tag}</span>
+          <span class="font-mono text-xs text-faint tabular">{count}</span>
+        </a>
+      ))}
+    </div>
+  </div>
+</BaseLayout>

@@ -1,0 +1,31 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import PostRow from '~/components/PostRow.astro';
+import { getAllPosts, getAllSeries, getSeriesPosts } from '~/lib/posts';
+
+export async function getStaticPaths() {
+  const posts = await getAllPosts();
+  const series = getAllSeries(posts);
+  return series.map((s) => ({ params: { id: s.id }, props: { series: s } }));
+}
+
+const { series } = Astro.props;
+const posts = await getAllPosts();
+const list = getSeriesPosts(posts, series.id);
+---
+
+<BaseLayout title={series.title} description={series.description}>
+  <div class="shell py-14 md:py-20">
+    <header class="mb-12 max-w-3xl" data-reveal>
+      <p class="kicker mb-3">Series · {list.length}편 완결 진행중</p>
+      <h1 class="text-balance font-display text-4xl font-bold leading-tight tracking-tight md:text-5xl">{series.title}</h1>
+      <p class="mt-5 text-[0.98rem] leading-relaxed text-soft">{series.description}</p>
+      <div class="series-bar mt-8 max-w-xs"><div style={'width:' + Math.min(100, (list.length / 24) * 100) + '%'}></div></div>
+      <p class="mt-2 font-mono text-[0.68rem] text-faint tabular">{list.length} / {list.length} episodes</p>
+    </header>
+
+    <ol class="timeline-rail ml-1" data-reveal>
+      {list.map((p, i) => <PostRow post={p} index={i + 1} />)}
+    </ol>
+  </div>
+</BaseLayout>

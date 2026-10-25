@@ -1,0 +1,675 @@
+---
+title: 'JavaScript 변수 선언: var, let, const와 스코프 이해하기'
+description: 'JavaScript의 변수 선언 방식인 var, let, const의 차이점을 비교 분석합니다. 함수 스코프와 블록 스코프의 차이, 호이스팅, TDZ(Temporal Dead Zone) 개념을 이해하고 상황별 올바른 변수 선언 방법을 학습합니다.'
+date: '2026-02-10'
+tags:
+  - 'JavaScript'
+  - 'var'
+  - 'let'
+  - 'const'
+  - 'Scope'
+  - 'Hoisting'
+  - '가이드'
+---
+
+# JavaScript 변수 선언: var, let, const와 스코프 이해하기
+
+## 개요
+
+JavaScript에서 변수를 선언하는 방법은 `var`, `let`, `const` 세 가지입니다. 각각은 스코프, 재할당, 호이스팅 동작에서 중요한 차이를 보입니다.
+
+이 문서를 읽으면 각 키워드의 특성을 이해하고, 상황에 맞는 올바른 선택을 할 수 있습니다. 특히 스코프와 관련된 흔한 버그를 예방하고, 더 안전한 코드를 작성할 수 있습니다.
+
+---
+
+## 배경
+
+### 왜 세 가지 선언 방식이 존재하는가?
+
+JavaScript는 처음 `var`만 존재했습니다. 하지만 `var`는 함수 스코프를 사용하고 호이스팅 동작이 예측하기 어려워 많은 버그를 유발했습니다.
+
+ES6(ES2015)에서 `let`과 `const`가 도입되면서 블록 스코프를 지원하게 되었고, 더 예측 가능하고 안전한 코드 작성이 가능해졌습니다.
+
+### 등장 이전의 방식
+
+ES6 이전에는 `var`만 사용할 수 있었습니다:
+
+```javascript
+// ES5 이전의 변수 선언
+var name = 'John';
+var age = 30;
+var user; // undefined로 초기화
+```
+
+문제는 `var`가 함수 스코프를 사용해서 블록 내에서 선언해도 블록 밖에서 접근 가능했다는 점입니다:
+
+```javascript
+if (true) {
+  var message = 'Hello';
+}
+console.log(message); // 'Hello' - 예상치 못한 동작!
+```
+
+---
+
+## 핵심 차이점 요약
+
+| 특성 | var | let | const |
+|------|-----|-----|-------|
+| 스코프 | 함수 스코프 | 블록 스코프 | 블록 스코프 |
+| 재할당 | 가능 | 가능 | 불가능 |
+| 재선언 | 가능 | 불가능 | 불가능 |
+| 호이스팅 | 선언만 (undefined) | TDZ | TDZ |
+| 전역 객체 속성 | 추가됨 | 추가 안됨 | 추가 안됨 |
+
+---
+
+## var: 함수 스코프 변수
+
+### 특징
+
+`var`는 함수 스코프를 사용합니다. 함수 내에서 선언하면 함수 전체에서 접근 가능하고, 함수 밖에서 선언하면 전역 변수가 됩니다.
+
+### 기본 사용법
+
+```javascript
+function greet() {
+  var message = 'Hello';
+  console.log(message); // 'Hello'
+}
+
+greet();
+console.log(message); // ReferenceError: message is not defined
+```
+
+### 블록 무시
+
+`var`는 블록(`{}`)을 무시합니다:
+
+```javascript
+if (true) {
+  var x = 10;
+}
+console.log(x); // 10 - 블록 밖에서도 접근 가능!
+
+for (var i = 0; i < 3; i++) {
+  // 반복문 내부
+}
+console.log(i); // 3 - 반복문이 끝난 후에도 i가 남아있음
+```
+
+### 재선언 가능
+
+```javascript
+var count = 5;
+var count = 10; // 오류 없음
+console.log(count); // 10
+```
+
+### 호이스팅
+
+변수 선언이 스코프의 최상단으로 끌어올려집니다:
+
+```javascript
+console.log(name); // undefined (오류가 아님)
+var name = 'John';
+
+// 실제 동작 방식:
+// var name;
+// console.log(name); // undefined
+// name = 'John';
+```
+
+### var의 문제점
+
+**1. 의도하지 않은 전역 변수**
+
+```javascript
+function calculate() {
+  result = 100; // var 없이 선언하면 전역 변수가 됨!
+  return result;
+}
+
+calculate();
+console.log(result); // 100 - 전역 스코프 오염!
+```
+
+**2. 반복문에서의 클로저 문제**
+
+```javascript
+// 문제가 있는 코드
+for (var i = 0; i < 3; i++) {
+  setTimeout(() => {
+    console.log(i);
+  }, 100);
+}
+// 출력: 3, 3, 3 (예상: 0, 1, 2)
+```
+
+---
+
+## let: 블록 스코프 변수
+
+### 특징
+
+`let`은 블록 스코프를 사용합니다. 중괄호(`{}`) 내에서만 유효하며, 재할당은 가능하지만 재선언은 불가능합니다.
+
+### 기본 사용법
+
+```javascript
+let age = 25;
+age = 26; // 재할당 가능
+console.log(age); // 26
+```
+
+### 블록 스코프
+
+```javascript
+if (true) {
+  let message = 'Hello';
+  console.log(message); // 'Hello'
+}
+console.log(message); // ReferenceError: message is not defined
+```
+
+```javascript
+for (let i = 0; i < 3; i++) {
+  // i는 이 블록 내에서만 유효
+  console.log(i); // 0, 1, 2
+}
+console.log(i); // ReferenceError: i is not defined
+```
+
+### 재선언 불가능
+
+```javascript
+let count = 5;
+let count = 10; // SyntaxError: Identifier 'count' has already been declared
+```
+
+### TDZ (Temporal Dead Zone)
+
+변수 선언 전에 접근하면 오류가 발생합니다:
+
+```javascript
+console.log(name); // ReferenceError: Cannot access 'name' before initialization
+let name = 'John';
+```
+
+### let으로 해결되는 문제
+
+**반복문에서의 클로저**
+
+```javascript
+// let을 사용한 올바른 코드
+for (let i = 0; i < 3; i++) {
+  setTimeout(() => {
+    console.log(i);
+  }, 100);
+}
+// 출력: 0, 1, 2 (예상대로 동작)
+```
+
+각 반복마다 새로운 `i`가 생성되어 클로저가 올바른 값을 캡처합니다.
+
+---
+
+## const: 불변 바인딩
+
+### 특징
+
+`const`는 블록 스코프를 사용하며, 재할당이 불가능합니다. 단, 객체나 배열의 내용은 변경할 수 있습니다.
+
+### 기본 사용법
+
+```javascript
+const PI = 3.14159;
+PI = 3.14; // TypeError: Assignment to constant variable
+```
+
+### 선언 시 초기화 필수
+
+```javascript
+const name; // SyntaxError: Missing initializer in const declaration
+const name = 'John'; // 올바른 사용법
+```
+
+### 객체와 배열
+
+**객체의 속성 변경은 가능**
+
+```javascript
+const user = {
+  name: 'John',
+  age: 30
+};
+
+user.age = 31; // 가능! 객체 내용 변경
+user.city = 'Seoul'; // 가능! 새 속성 추가
+console.log(user); // { name: 'John', age: 31, city: 'Seoul' }
+
+user = {}; // TypeError: Assignment to constant variable
+```
+
+**배열 요소 변경은 가능**
+
+```javascript
+const numbers = [1, 2, 3];
+
+numbers.push(4); // 가능! 배열 내용 변경
+numbers[0] = 10; // 가능! 요소 수정
+console.log(numbers); // [10, 2, 3, 4]
+
+numbers = []; // TypeError: Assignment to constant variable
+```
+
+### 완전한 불변성이 필요한 경우
+
+```javascript
+const config = Object.freeze({
+  apiUrl: 'https://api.example.com',
+  timeout: 5000
+});
+
+config.timeout = 10000; // 무시됨 (strict mode에서는 오류)
+console.log(config.timeout); // 5000
+```
+
+---
+
+## 스코프 심화
+
+### 1. 전역 스코프
+
+파일 최상위 레벨에서 선언된 변수는 전역 스코프를 가집니다:
+
+```javascript
+// 전역 스코프
+const globalVar = 'I am global';
+
+function test() {
+  console.log(globalVar); // 접근 가능
+}
+
+if (true) {
+  console.log(globalVar); // 접근 가능
+}
+```
+
+### 2. 함수 스코프
+
+함수 내에서 선언된 변수는 함수 내에서만 유효합니다:
+
+```javascript
+function calculate() {
+  const result = 100;
+
+  function innerFunction() {
+    console.log(result); // 접근 가능 (외부 함수 스코프)
+  }
+
+  innerFunction();
+  return result;
+}
+
+console.log(result); // ReferenceError: result is not defined
+```
+
+### 3. 블록 스코프
+
+`let`과 `const`는 블록 레벨 스코프를 만듭니다:
+
+```javascript
+{
+  const blockScoped = 'Only here';
+  let alsoBlockScoped = 'Me too';
+  console.log(blockScoped); // 'Only here'
+}
+console.log(blockScoped); // ReferenceError
+```
+
+### 4. 스코프 체인
+
+내부 스코프는 외부 스코프의 변수에 접근할 수 있습니다:
+
+```javascript
+const global = 'global';
+
+function outer() {
+  const outerVar = 'outer';
+
+  function inner() {
+    const innerVar = 'inner';
+
+    // 모든 상위 스코프 변수 접근 가능
+    console.log(innerVar);  // 'inner'
+    console.log(outerVar);  // 'outer'
+    console.log(global);    // 'global'
+  }
+
+  inner();
+  console.log(innerVar); // ReferenceError
+}
+
+outer();
+```
+
+### 5. 변수 섀도잉 (Shadowing)
+
+내부 스코프에서 같은 이름의 변수를 선언하면 외부 변수를 가립니다:
+
+```javascript
+const name = 'Global';
+
+function test() {
+  const name = 'Function';
+
+  if (true) {
+    const name = 'Block';
+    console.log(name); // 'Block' - 가장 가까운 스코프
+  }
+
+  console.log(name); // 'Function'
+}
+
+test();
+console.log(name); // 'Global'
+```
+
+---
+
+## 실제 사용 가이드
+
+### 기본 원칙
+
+**1. 기본적으로 `const` 사용**
+
+```javascript
+const MAX_USERS = 100;
+const API_URL = 'https://api.example.com';
+const user = { name: 'John', age: 30 };
+```
+
+**2. 재할당이 필요한 경우만 `let` 사용**
+
+```javascript
+let count = 0;
+for (let i = 0; i < 10; i++) {
+  count += i;
+}
+
+let status = 'pending';
+if (condition) {
+  status = 'active';
+}
+```
+
+**3. `var`는 사용하지 않기**
+
+```javascript
+// ❌ 피해야 할 코드
+var oldStyle = 'legacy';
+
+// ✅ 권장되는 코드
+const modernStyle = 'recommended';
+```
+
+### 상황별 선택 가이드
+
+**반복문**
+
+```javascript
+// 카운터 변수는 let
+for (let i = 0; i < 10; i++) {
+  console.log(i);
+}
+
+// 반복 대상은 const
+const items = [1, 2, 3, 4, 5];
+for (const item of items) {
+  console.log(item);
+}
+```
+
+**설정값과 상수**
+
+```javascript
+// 변하지 않는 설정값
+const CONFIG = {
+  apiUrl: 'https://api.example.com',
+  timeout: 5000,
+  retries: 3
+};
+
+// 수학 상수
+const PI = 3.14159;
+const E = 2.71828;
+```
+
+**조건에 따른 값 할당**
+
+```javascript
+// 재할당이 필요하므로 let
+let message;
+if (user.isAdmin) {
+  message = 'Welcome, Admin!';
+} else {
+  message = 'Welcome, User!';
+}
+
+// 또는 const로 직접 할당
+const message = user.isAdmin ? 'Welcome, Admin!' : 'Welcome, User!';
+```
+
+---
+
+## 흔한 실수와 해결책
+
+### 실수 1: 반복문에서 var 사용
+
+**문제**
+
+```javascript
+for (var i = 0; i < 5; i++) {
+  setTimeout(() => {
+    console.log(i); // 5, 5, 5, 5, 5
+  }, 100);
+}
+```
+
+**해결책**
+
+```javascript
+for (let i = 0; i < 5; i++) {
+  setTimeout(() => {
+    console.log(i); // 0, 1, 2, 3, 4
+  }, 100);
+}
+```
+
+### 실수 2: const 객체 재할당 시도
+
+**문제**
+
+```javascript
+const user = { name: 'John' };
+user = { name: 'Jane' }; // TypeError
+```
+
+**해결책**
+
+```javascript
+// 객체 속성 변경
+const user = { name: 'John' };
+user.name = 'Jane'; // 가능
+
+// 또는 새 객체가 필요하면 let 사용
+let user = { name: 'John' };
+user = { name: 'Jane' }; // 가능
+```
+
+### 실수 3: 호이스팅 오해
+
+**문제**
+
+```javascript
+function test() {
+  console.log(x); // undefined (오류 아님)
+  var x = 10;
+}
+```
+
+**해결책**
+
+```javascript
+function test() {
+  const x = 10;
+  console.log(x); // 10 - 선언 후 사용
+}
+
+// 또는 선언 전 접근 시 명확한 오류
+function test() {
+  console.log(x); // ReferenceError
+  const x = 10;
+}
+```
+
+### 실수 4: 전역 스코프 오염
+
+**문제**
+
+```javascript
+function calculate() {
+  total = 100; // 의도치 않게 전역 변수 생성
+  return total;
+}
+```
+
+**해결책**
+
+```javascript
+function calculate() {
+  const total = 100; // 명시적으로 스코프 지정
+  return total;
+}
+```
+
+---
+
+## 성능 고려사항
+
+### const vs let 성능
+
+실제로 `const`와 `let`의 성능 차이는 미미합니다. 모던 JavaScript 엔진은 둘 다 효율적으로 최적화합니다.
+
+```javascript
+// 성능 차이는 거의 없음
+const iterations = 1000000;
+
+// const 사용
+console.time('const');
+for (let i = 0; i < iterations; i++) {
+  const x = i * 2;
+}
+console.timeEnd('const');
+
+// let 사용
+console.time('let');
+for (let i = 0; i < iterations; i++) {
+  let x = i * 2;
+}
+console.timeEnd('let');
+```
+
+### 권장사항
+
+1. **가독성과 의도 표현이 우선**: `const` 사용으로 "이 값은 변하지 않는다"는 의도를 명확히 전달
+2. **미세 최적화보다 코드 안정성**: 성능을 위해 `const` 대신 `let`을 선택할 필요 없음
+3. **번들 크기**: `var`, `let`, `const` 모두 컴파일 후 번들 크기 차이 없음
+
+---
+
+## 마이그레이션 가이드
+
+### var에서 let/const로 전환
+
+**1단계: var 찾기**
+
+```javascript
+// 기존 코드
+function oldCode() {
+  var name = 'John';
+  var age = 30;
+  var isActive = true;
+}
+```
+
+**2단계: 재할당 여부 확인**
+
+```javascript
+// 재할당이 없는 경우 → const
+function newCode() {
+  const name = 'John';
+  const isActive = true;
+
+  // 재할당이 있는 경우 → let
+  let age = 30;
+  age = 31; // 재할당
+}
+```
+
+**3단계: 스코프 확인**
+
+```javascript
+// 블록 스코프가 문제가 되는 경우 확인
+if (true) {
+  var x = 10; // 함수 전체에서 접근
+}
+
+// let/const로 변경 시 스코프 변경 주의
+if (true) {
+  const x = 10; // 블록 내에서만 접근
+}
+```
+
+---
+
+## 체크리스트
+
+변수 선언 시 다음을 고려하세요:
+
+- [ ] 기본적으로 `const` 사용
+- [ ] 재할당이 필요한 경우만 `let` 사용
+- [ ] `var`는 사용하지 않기
+- [ ] 블록 스코프를 활용하여 변수 범위 최소화
+- [ ] 전역 변수 사용 최소화
+- [ ] 변수 선언 전에 사용하지 않기
+- [ ] 의미 있는 변수명 사용
+
+---
+
+## 추가 학습 자료
+
+**관련 개념**
+- [클로저(Closure) 이해하기](./closures.md)
+- [호이스팅(Hoisting) 깊이 알아보기](./hoisting.md)
+- [실행 컨텍스트(Execution Context)](./execution-context.md)
+
+**실습**
+- [변수와 스코프 연습 문제](./exercises/variables-scope.md)
+- [리팩토링 챌린지: var를 let/const로](./exercises/refactoring.md)
+
+**참고 문서**
+- [MDN: let](https://developer.mozilla.org/ko/docs/Web/JavaScript/Reference/Statements/let)
+- [MDN: const](https://developer.mozilla.org/ko/docs/Web/JavaScript/Reference/Statements/const)
+- [MDN: var](https://developer.mozilla.org/ko/docs/Web/JavaScript/Reference/Statements/var)
+
+---
+
+## 요약
+
+- **var**: 함수 스코프, 재선언/재할당 가능, 호이스팅, 레거시
+- **let**: 블록 스코프, 재할당 가능, 재선언 불가, TDZ
+- **const**: 블록 스코프, 재할당/재선언 불가, TDZ, 기본 선택
+
+**황금 규칙**: 기본은 `const`, 재할당 필요시 `let`, `var`는 절대 사용하지 않기

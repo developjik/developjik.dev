@@ -1,0 +1,341 @@
+---
+title: 'JavaScript 호이스팅 완벽 가이드'
+date: '2024-12-04'
+description: 'JavaScript에서 변수와 함수 선언이 스코프 최상단으로 끌어올려지는 호이스팅의 원리와 동작 방식, 그리고 주의할 점을 상세히 알아봅니다.'
+tags: ['JavaScript', 'Hoisting', '완벽 가이드']
+---
+
+# JavaScript 호이스팅 완벽 가이드
+
+## 개요
+
+호이스팅(Hoisting)은 JavaScript에서 변수와 함수 선언이 코드 실행 전에 해당 스코프의 최상단으로 끌어올려지는 동작을 말합니다. 이 개념을 이해하면 예상치 못한 `undefined` 오류나 함수 호출 순서 문제를 방지할 수 있습니다.
+
+## 배경
+
+### 왜 필요한가?
+
+JavaScript는 코드를 실행하기 전에 **컴파일 단계**를 거칩니다. 이 단계에서 모든 변수와 함수 선언을 메모리에 먼저 할당합니다. 이로 인해 선언보다 먼저 변수나 함수를 사용할 수 있는 현상이 발생하는데, 이를 호이스팅이라고 합니다.
+
+실제로 코드가 물리적으로 이동하는 것은 아니지만, 동작 방식이 마치 선언부가 스코프 최상단으로 "끌어올려진" 것처럼 보입니다.
+
+### 등장 이전의 방식
+
+초기 프로그래밍 언어들은 변수를 사용하기 전에 반드시 선언해야 했습니다. JavaScript는 더 유연한 개발 경험을 제공하기 위해 호이스팅을 도입했지만, 이로 인해 예상치 못한 버그가 발생하기도 합니다.
+
+## 동작 원리
+
+### 핵심 메커니즘
+
+JavaScript 엔진은 코드를 실행할 때 다음 두 단계를 거칩니다:
+
+1. **생성 단계(Creation Phase)**: 스코프 내 모든 변수와 함수 선언을 찾아 메모리에 공간을 할당합니다.
+2. **실행 단계(Execution Phase)**: 코드를 한 줄씩 실행하며 값을 할당하고 함수를 호출합니다.
+
+### 시각적 예시
+
+```
+[작성한 코드]                    [실제 실행되는 순서]
+┌─────────────────┐             ┌─────────────────┐
+│ console.log(x); │             │ var x;          │ ← 선언부 호이스팅
+│ var x = 5;      │    →        │ console.log(x); │ ← undefined 출력
+└─────────────────┘             │ x = 5;          │ ← 할당은 원래 위치
+                                └─────────────────┘
+```
+
+### 코드로 이해하기
+
+```javascript
+// 우리가 작성한 코드
+console.log(greeting); // undefined (에러가 아님!)
+var greeting = "안녕하세요";
+console.log(greeting); // "안녕하세요"
+
+// JavaScript 엔진이 해석하는 방식
+var greeting;          // 선언부가 호이스팅됨
+console.log(greeting); // undefined
+greeting = "안녕하세요"; // 할당은 원래 위치에서 실행
+console.log(greeting); // "안녕하세요"
+```
+
+## 주요 특징
+
+### 특징 1: 변수 호이스팅 - var, let, const의 차이
+
+#### var 키워드
+
+`var`로 선언한 변수는 선언부가 호이스팅되고 `undefined`로 초기화됩니다.
+
+```javascript
+console.log(name); // undefined
+var name = "김철수";
+console.log(name); // "김철수"
+```
+
+#### let과 const 키워드
+
+`let`과 `const`도 호이스팅되지만, **Temporal Dead Zone(TDZ)**이 존재하여 선언 전에 접근하면 에러가 발생합니다.
+
+```javascript
+console.log(age); // ReferenceError: Cannot access 'age' before initialization
+let age = 25;
+
+console.log(city); // ReferenceError: Cannot access 'city' before initialization
+const city = "서울";
+```
+
+**왜 이런 차이가 있을까?**
+
+`var`는 선언과 동시에 `undefined`로 초기화되지만, `let`과 `const`는 선언만 호이스팅되고 초기화는 실제 선언문에 도달해야 이루어집니다.
+
+### 특징 2: 함수 호이스팅
+
+#### 함수 선언문(Function Declaration)
+
+함수 선언문 전체가 호이스팅되므로, 선언 전에 호출할 수 있습니다.
+
+```javascript
+// 함수 선언 전에 호출 가능
+sayHello(); // "Hello!"
+
+function sayHello() {
+  console.log("Hello!");
+}
+```
+
+#### 함수 표현식(Function Expression)
+
+함수 표현식은 변수 호이스팅 규칙을 따릅니다.
+
+```javascript
+// var를 사용한 함수 표현식
+greet(); // TypeError: greet is not a function
+
+var greet = function() {
+  console.log("안녕하세요!");
+};
+
+// let/const를 사용한 함수 표현식
+sayGoodbye(); // ReferenceError: Cannot access 'sayGoodbye' before initialization
+
+const sayGoodbye = function() {
+  console.log("안녕히 가세요!");
+};
+```
+
+## 실제 사용 사례
+
+### 사례 1: 함수 선언 순서 자유롭게 하기
+
+함수 호이스팅 덕분에 코드의 가독성을 높일 수 있습니다.
+
+```javascript
+// 메인 로직을 먼저 보여주고
+function main() {
+  const result = calculateTotal(100, 200);
+  displayResult(result);
+}
+
+// 세부 구현은 아래에 배치
+function calculateTotal(a, b) {
+  return a + b;
+}
+
+function displayResult(value) {
+  console.log(`결과: ${value}`);
+}
+
+main(); // 정상 작동
+```
+
+### 사례 2: 반복문 안에서 var 사용 시 주의점
+
+`var`는 함수 스코프이므로 블록 스코프를 무시합니다.
+
+```javascript
+// ❌ 잘못된 예: var 사용
+for (var i = 0; i < 3; i++) {
+  setTimeout(function() {
+    console.log(i); // 3, 3, 3 출력
+  }, 1000);
+}
+
+// ✅ 올바른 예: let 사용
+for (let i = 0; i < 3; i++) {
+  setTimeout(function() {
+    console.log(i); // 0, 1, 2 출력
+  }, 1000);
+}
+```
+
+### 사례 3: 조건부 함수 선언
+
+```javascript
+// ❌ 예상치 못한 동작
+console.log(typeof getData); // "function" (호이스팅됨)
+
+if (true) {
+  function getData() {
+    return "데이터 A";
+  }
+} else {
+  function getData() {
+    return "데이터 B";
+  }
+}
+
+console.log(getData()); // 브라우저마다 결과가 다를 수 있음
+
+// ✅ 권장: 함수 표현식 사용
+let getData;
+
+if (true) {
+  getData = function() {
+    return "데이터 A";
+  };
+} else {
+  getData = function() {
+    return "데이터 B";
+  };
+}
+
+console.log(getData()); // "데이터 A" (예측 가능)
+```
+
+## 장점과 한계
+
+### 장점
+
+- ✅ **유연한 코드 구조**: 함수를 선언 전에 호출할 수 있어 코드 구조를 자유롭게 배치할 수 있습니다
+- ✅ **상호 재귀 함수**: 두 함수가 서로를 호출하는 패턴을 쉽게 구현할 수 있습니다
+
+```javascript
+function isEven(n) {
+  if (n === 0) return true;
+  return isOdd(n - 1);
+}
+
+function isOdd(n) {
+  if (n === 0) return false;
+  return isEven(n - 1);
+}
+
+console.log(isEven(4)); // true
+```
+
+### 한계
+
+- ⚠️ **예상치 못한 undefined**: `var` 사용 시 선언 전에 접근하면 에러 대신 `undefined`를 반환하여 버그를 찾기 어렵습니다
+- ⚠️ **스코프 혼란**: 함수 스코프와 블록 스코프의 차이로 인해 혼란이 발생할 수 있습니다
+- ⚠️ **의도하지 않은 전역 변수**: 선언 없이 변수를 할당하면 전역 변수가 생성됩니다
+
+```javascript
+function setName() {
+  name = "홍길동"; // var, let, const 없이 사용
+}
+
+setName();
+console.log(window.name); // "홍길동" (전역 변수가 됨!)
+```
+
+### 트레이드오프
+
+**언제 활용하면 좋을까:**
+- 함수 선언문을 사용하여 가독성 높은 코드 구조를 만들 때
+- 상호 재귀 함수나 복잡한 함수 간 의존성이 있을 때
+
+**언제 피해야 할까:**
+- 변수를 선언 전에 사용해야 하는 경우 (대신 코드 순서를 조정하세요)
+- 블록 스코프가 필요한 경우 (`let`, `const`를 사용하세요)
+
+## 관련 개념
+
+### 유사 개념
+
+- **스코프(Scope)**: 호이스팅은 스코프 단위로 발생합니다. 함수 스코프와 블록 스코프의 차이를 이해해야 호이스팅을 제대로 활용할 수 있습니다.
+- **클로저(Closure)**: 호이스팅으로 생성된 변수의 스코프를 이해하면 클로저 동작도 더 명확히 이해할 수 있습니다.
+
+### 대안
+
+- **ES6+ 문법 사용**: `let`과 `const`를 사용하면 TDZ 덕분에 선언 전 접근 시 명확한 에러를 얻을 수 있습니다.
+- **Strict Mode**: `"use strict"`를 사용하면 선언 없는 변수 할당 등 위험한 코드를 방지할 수 있습니다.
+
+```javascript
+"use strict";
+
+function test() {
+  x = 10; // ReferenceError: x is not defined
+}
+```
+
+## 베스트 프랙티스
+
+### 1. var 대신 let/const 사용
+
+```javascript
+// ❌ 피하기
+var count = 0;
+
+// ✅ 권장
+let count = 0;
+const MAX_COUNT = 100;
+```
+
+### 2. 변수는 사용 전에 선언
+
+```javascript
+// ❌ 피하기
+console.log(user);
+let user = { name: "김철수" };
+
+// ✅ 권장
+let user = { name: "김철수" };
+console.log(user);
+```
+
+### 3. 함수 선언문과 표현식 상황에 맞게 사용
+
+```javascript
+// ✅ 함수 선언문: 메인 로직에서 사용하는 유틸리티 함수
+function calculateDiscount(price, rate) {
+  return price * (1 - rate);
+}
+
+// ✅ 함수 표현식: 조건부로 다른 함수를 할당해야 하는 경우
+const getPrice = isVIP 
+  ? function() { return calculateDiscount(100, 0.2); }
+  : function() { return 100; };
+```
+
+### 4. Strict Mode 활성화
+
+```javascript
+"use strict";
+
+// 선언 없는 변수 할당 방지
+function initialize() {
+  count = 0; // ReferenceError
+}
+```
+
+## 더 알아보기
+
+**심화 학습**:
+- [JavaScript 실행 컨텍스트와 스코프 체인](https://developer.mozilla.org/ko/docs/Web/JavaScript/Closures)
+- [Temporal Dead Zone 완벽 가이드](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/let#temporal_dead_zone_tdz)
+
+**실습**:
+- [JavaScript 변수 선언 방식 비교 튜토리얼](https://javascript.info/var)
+
+**관련 자료**:
+- [MDN - Hoisting](https://developer.mozilla.org/ko/docs/Glossary/Hoisting)
+- [You Don't Know JS: Scope & Closures](https://github.com/getify/You-Dont-Know-JS)
+
+---
+
+## 요약
+
+- 호이스팅은 변수/함수 선언이 스코프 최상단으로 끌어올려지는 JavaScript의 특징입니다
+- `var`는 `undefined`로 초기화되지만, `let`/`const`는 TDZ로 인해 선언 전 접근 시 에러가 발생합니다
+- 함수 선언문은 전체가 호이스팅되어 선언 전 호출이 가능합니다
+- 현대 JavaScript 개발에서는 `let`/`const` 사용과 strict mode 활성화를 권장합니다

@@ -1,0 +1,18 @@
+---
+interface Props {
+  title: string;
+  url: string;
+}
+const { title, url } = Astro.props;
+const xUrl = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(title) + '&url=' + encodeURIComponent(url);
+---
+
+<div class="flex items-center gap-2 no-print">
+  <span class="font-mono text-xs text-faint">share</span>
+  <a href={xUrl} target="_blank" rel="noopener" class="icon-btn !h-8 !w-8" aria-label="X에 공유">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 1.15h3.68l-8.04 9.19L24 22.85h-7.4l-5.8-7.58-6.64 7.58H.46l8.6-9.83L0 1.15h7.6l5.24 6.93 6.06-6.93Zm-1.3 19.5h2.04L6.5 3.24H4.3l13.3 17.4Z" /></svg>
+  </a>
+  <button type="button" class="icon-btn !h-8 !w-8" data-copy-link data-url={url} aria-label="링크 복사" title="링크 복사">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" /></svg>
+  </button>
+</div>

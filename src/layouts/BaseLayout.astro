@@ -1,0 +1,115 @@
+---
+import { ClientRouter } from 'astro:transitions';
+import BaseHead from '~/components/BaseHead.astro';
+import Header from '~/components/Header.astro';
+import Footer from '~/components/Footer.astro';
+import CommandPalette from '~/components/CommandPalette.astro';
+import { SITE } from '~/consts';
+
+import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
+import '@fontsource-variable/space-grotesk';
+import '@fontsource-variable/jetbrains-mono';
+import '~/styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  type?: 'website' | 'article';
+  jsonLd?: string;
+  publishedTime?: string;
+  tags?: string[];
+}
+
+const {
+  title = SITE.name,
+  description = SITE.description,
+  image,
+  type = 'website',
+  jsonLd,
+  publishedTime,
+  tags,
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="ko" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <BaseHead
+      title={title}
+      description={description}
+      image={image}
+      type={type}
+      jsonLd={jsonLd}
+      publishedTime={publishedTime}
+      tags={tags}
+      path={Astro.url.pathname}
+    />
+    <ClientRouter />
+  </head>
+  <body class="min-h-screen antialiased">
+    <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-accent focus:px-4 focus:py-2 focus:text-accent-ink">
+      본문으로 건너뛰기
+    </a>
+    <Header currentPath={Astro.url.pathname} />
+    <main id="main" class="min-h-[62vh]">
+      <slot />
+    </main>
+    <Footer />
+    <CommandPalette />
+
+    <script>
+      // ---- global behaviors (rerun on every astro page load) ----
+      function initBehaviors() {
+        if (document.body.dataset.behaviorsInit === '1') return;
+        document.body.dataset.behaviorsInit = '1';
+        // theme toggle
+        document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const cur = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+            const next = cur === 'dark' ? 'light' : 'dark';
+            document.documentElement.dataset.theme = next;
+            try { localStorage.setItem('theme', next); } catch (e) {}
+          });
+        });
+
+        // mobile menu
+        const menuBtn = document.querySelector('[data-menu-toggle]');
+        const menu = document.querySelector('[data-mobile-menu]');
+        if (menuBtn && menu) {
+          menuBtn.addEventListener('click', () => {
+            const open = menu.classList.toggle('hidden') === false;
+            menuBtn.setAttribute('aria-expanded', String(open));
+          });
+        }
+
+        // reveal on scroll
+        const revealables = document.querySelectorAll('[data-reveal]');
+        if ('IntersectionObserver' in window) {
+          const io = new IntersectionObserver(
+            (entries) => {
+              for (const en of entries) {
+                if (en.isIntersecting) {
+                  en.target.classList.add('revealed');
+                  io.unobserve(en.target);
+                }
+              }
+            },
+            { rootMargin: '0px 0px -8% 0px' },
+          );
+          revealables.forEach((el) => io.observe(el));
+        } else {
+          revealables.forEach((el) => el.classList.add('revealed'));
+        }
+      }
+
+      document.addEventListener('astro:page-load', initBehaviors);
+      if (!document.querySelector('[data-astro-rerun]')) {
+        // initial load for non-clientrouter fallback
+      }
+      initBehaviors();
+    </script>
+  </body>
+</html>

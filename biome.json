@@ -32,7 +32,8 @@
         "noSvgWithoutTitle": "warn"
       },
       "complexity": {
-        "noExcessiveCognitiveComplexity": "off"
+        "noExcessiveCognitiveComplexity": "off",
+        "noImportantStyles": "off"
       },
       "correctness": {
         "useExhaustiveDependencies": "off"
@@ -71,6 +72,9 @@
       "enabled": true,
       "indentStyle": "space",
       "indentWidth": 2
+    },
+    "parser": {
+      "tailwindDirectives": true
     }
   }
 }

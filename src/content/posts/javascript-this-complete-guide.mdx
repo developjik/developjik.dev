@@ -1,0 +1,856 @@
+---
+title: 'JavaScript의 this 완벽 가이드'
+date: '2024-12-06'
+description: 'JavaScript의 this 키워드에 대한 완벽한 가이드입니다. 5가지 바인딩 규칙과 실전 예제를 통해 this의 동작 원리를 정확히 이해할 수 있습니다.'
+tags: ['JavaScript', 'This', 'Binding', '완벽 가이드']
+---
+
+# JavaScript의 this 완벽 가이드
+
+## 개요
+
+`this`는 JavaScript의 실행 컨텍스트를 참조하는 특별한 키워드입니다. 함수가 호출되는 방식에 따라 `this`가 가리키는 대상이 달라지며, 이는 JavaScript 개발자들이 가장 혼란스러워하는 개념 중 하나입니다.
+
+이 가이드에서는 `this`의 동작 원리와 다섯 가지 바인딩 규칙을 학습합니다. 실제 코드 예제를 통해 각 상황에서 `this`가 무엇을 가리키는지 정확히 이해할 수 있습니다.
+
+## this가 필요한 이유
+
+### 문제 상황
+
+객체 지향 프로그래밍에서 메서드는 자신이 속한 객체의 데이터에 접근해야 합니다. `this` 없이는 매번 객체를 명시적으로 참조해야 하는 불편함이 있습니다.
+
+```javascript
+// this 없이 작성한 코드 (비효율적)
+const user = {
+  name: 'Alice',
+  age: 25,
+  greet: function() {
+    // 객체를 직접 참조해야 함
+    console.log(`안녕하세요, ${user.name}입니다.`);
+  }
+};
+
+user.greet(); // "안녕하세요, Alice입니다."
+```
+
+위 코드의 문제점:
+- `user` 객체명이 변경되면 메서드 내부도 수정해야 함
+- 같은 메서드를 다른 객체에서 재사용하기 어려움
+- 객체와 메서드가 강하게 결합됨
+
+### this를 사용한 해결
+
+```javascript
+// this를 사용한 코드 (효율적)
+const user = {
+  name: 'Alice',
+  age: 25,
+  greet: function() {
+    // this는 메서드를 호출한 객체를 참조
+    console.log(`안녕하세요, ${this.name}입니다.`);
+  }
+};
+
+user.greet(); // "안녕하세요, Alice입니다."
+
+// 같은 메서드를 다른 객체에서 재사용 가능
+const admin = {
+  name: 'Bob',
+  age: 30,
+  greet: user.greet // 메서드 재사용
+};
+
+admin.greet(); // "안녕하세요, Bob입니다."
+```
+
+## this의 5가지 바인딩 규칙
+
+`this`의 값은 **함수가 정의된 위치가 아니라 호출되는 방식**에 따라 결정됩니다. 다섯 가지 바인딩 규칙이 있으며, 우선순위가 존재합니다.
+
+### 규칙 1: 기본 바인딩 (Default Binding)
+
+**조건**: 다른 바인딩 규칙이 적용되지 않을 때 (단독 함수 호출)
+
+**결과**:
+- 비엄격 모드: 전역 객체 (`window` 또는 `global`)
+- 엄격 모드: `undefined`
+
+```javascript
+function showThis() {
+  console.log(this);
+}
+
+// 단독 함수 호출
+showThis(); // 비엄격 모드: window, 엄격 모드: undefined
+
+// 엄격 모드 예시
+'use strict';
+function strictMode() {
+  console.log(this);
+}
+
+strictMode(); // undefined
+```
+
+**실무 활용**:
+```javascript
+// 일반 함수에서 this 사용 피하기
+function calculateTotal(items) {
+  // ❌ this를 사용하지 않음
+  return items.reduce((sum, item) => sum + item.price, 0);
+}
+
+const total = calculateTotal([
+  { price: 1000 },
+  { price: 2000 }
+]);
+console.log(total); // 3000
+```
+
+---
+
+### 규칙 2: 암시적 바인딩 (Implicit Binding)
+
+**조건**: 객체의 메서드로 호출될 때
+
+**결과**: 메서드를 호출한 객체
+
+```javascript
+const person = {
+  name: 'Alice',
+  age: 25,
+  introduce: function() {
+    console.log(`제 이름은 ${this.name}이고, ${this.age}살입니다.`);
+  }
+};
+
+// 객체의 메서드로 호출
+person.introduce(); // "제 이름은 Alice이고, 25살입니다."
+// this === person
+```
+
+**중첩된 객체의 경우**:
+```javascript
+const company = {
+  name: 'TechCorp',
+  department: {
+    name: 'Development',
+    introduce: function() {
+      console.log(`${this.name} 부서입니다.`);
+    }
+  }
+};
+
+// this는 직접적인 호출 객체를 참조
+company.department.introduce(); // "Development 부서입니다."
+// this === company.department (company가 아님!)
+```
+
+**주의: 암시적 바인딩 손실**
+
+메서드를 다른 변수에 할당하면 암시적 바인딩이 사라집니다.
+
+```javascript
+const person = {
+  name: 'Alice',
+  greet: function() {
+    console.log(`안녕하세요, ${this.name}입니다.`);
+  }
+};
+
+// 메서드를 변수에 할당
+const greetFunc = person.greet;
+
+// 단독 함수로 호출되어 기본 바인딩 적용
+greetFunc(); // "안녕하세요, undefined입니다."
+// this는 전역 객체 또는 undefined
+```
+
+**콜백 함수에서의 손실**:
+```javascript
+const person = {
+  name: 'Alice',
+  greet: function() {
+    console.log(`안녕하세요, ${this.name}입니다.`);
+  }
+};
+
+// setTimeout에 메서드를 전달
+setTimeout(person.greet, 1000);
+// 1초 후: "안녕하세요, undefined입니다."
+// person.greet가 단독 함수로 실행됨
+
+// 해결 방법 1: 화살표 함수로 감싸기
+setTimeout(() => person.greet(), 1000);
+// 1초 후: "안녕하세요, Alice입니다."
+
+// 해결 방법 2: bind 사용 (규칙 3 참조)
+setTimeout(person.greet.bind(person), 1000);
+// 1초 후: "안녕하세요, Alice입니다."
+```
+
+---
+
+### 규칙 3: 명시적 바인딩 (Explicit Binding)
+
+**조건**: `call()`, `apply()`, `bind()`를 사용할 때
+
+**결과**: 명시적으로 지정한 객체
+
+#### 3-1. call()
+
+첫 번째 인자로 `this`를 설정하고, 나머지 인자를 개별적으로 전달합니다.
+
+```javascript
+function introduce(greeting, punctuation) {
+  console.log(`${greeting}, 제 이름은 ${this.name}입니다${punctuation}`);
+}
+
+const person1 = { name: 'Alice' };
+const person2 = { name: 'Bob' };
+
+// call: this를 person1으로 설정
+introduce.call(person1, '안녕하세요', '!');
+// "안녕하세요, 제 이름은 Alice입니다!"
+
+// call: this를 person2로 설정
+introduce.call(person2, '반갑습니다', '.');
+// "반갑습니다, 제 이름은 Bob입니다."
+```
+
+#### 3-2. apply()
+
+첫 번째 인자로 `this`를 설정하고, 나머지 인자를 배열로 전달합니다.
+
+```javascript
+function introduce(greeting, punctuation) {
+  console.log(`${greeting}, 제 이름은 ${this.name}입니다${punctuation}`);
+}
+
+const person = { name: 'Alice' };
+const args = ['안녕하세요', '!'];
+
+// apply: 인자를 배열로 전달
+introduce.apply(person, args);
+// "안녕하세요, 제 이름은 Alice입니다!"
+
+// 실무 예시: 배열의 최댓값 구하기
+const numbers = [5, 6, 2, 3, 7];
+const max = Math.max.apply(null, numbers);
+console.log(max); // 7
+
+// ES6 이후에는 스프레드 연산자 사용 권장
+const max2 = Math.max(...numbers);
+console.log(max2); // 7
+```
+
+#### 3-3. bind()
+
+새로운 함수를 생성하고, `this`를 영구적으로 고정합니다.
+
+```javascript
+const person = {
+  name: 'Alice',
+  greet: function() {
+    console.log(`안녕하세요, ${this.name}입니다.`);
+  }
+};
+
+// bind: this가 고정된 새 함수 생성
+const boundGreet = person.greet.bind(person);
+
+// 언제 호출해도 this는 person
+boundGreet(); // "안녕하세요, Alice입니다."
+
+setTimeout(boundGreet, 1000);
+// 1초 후: "안녕하세요, Alice입니다."
+
+// 다른 객체의 메서드로 할당해도 유지됨
+const anotherObj = {
+  name: 'Bob',
+  greet: boundGreet
+};
+anotherObj.greet(); // "안녕하세요, Alice입니다." (Bob이 아님!)
+```
+
+**실무 활용: React 클래스 컴포넌트**:
+```javascript
+class Counter extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { count: 0 };
+
+    // 메서드의 this를 컴포넌트 인스턴스로 고정
+    this.increment = this.increment.bind(this);
+  }
+
+  increment() {
+    this.setState({ count: this.state.count + 1 });
+  }
+
+  render() {
+    return (
+      <div>
+        <p>Count: {this.state.count}</p>
+        {/* 이벤트 핸들러로 전달해도 this가 유지됨 */}
+        <button onClick={this.increment}>증가</button>
+      </div>
+    );
+  }
+}
+```
+
+---
+
+### 규칙 4: new 바인딩
+
+**조건**: `new` 키워드로 생성자 함수를 호출할 때
+
+**결과**: 새로 생성된 객체
+
+```javascript
+function Person(name, age) {
+  // this는 새로 생성되는 객체를 가리킴
+  this.name = name;
+  this.age = age;
+  this.introduce = function() {
+    console.log(`제 이름은 ${this.name}이고, ${this.age}살입니다.`);
+  };
+}
+
+// new로 호출: this는 새 객체
+const alice = new Person('Alice', 25);
+alice.introduce(); // "제 이름은 Alice이고, 25살입니다."
+
+const bob = new Person('Bob', 30);
+bob.introduce(); // "제 이름은 Bob이고, 30살입니다."
+
+console.log(alice instanceof Person); // true
+```
+
+**new 없이 호출하면?**
+```javascript
+function Person(name, age) {
+  this.name = name;
+  this.age = age;
+}
+
+// ❌ new 없이 호출: 기본 바인딩 적용
+const alice = Person('Alice', 25);
+
+console.log(alice); // undefined (반환값 없음)
+console.log(window.name); // "Alice" (전역 객체에 추가됨!)
+
+// 해결: new 강제하기
+function SafePerson(name, age) {
+  // new로 호출되지 않았다면 new를 추가하여 재호출
+  if (!(this instanceof SafePerson)) {
+    return new SafePerson(name, age);
+  }
+  this.name = name;
+  this.age = age;
+}
+
+const bob = SafePerson('Bob', 30); // new 없어도 동작
+console.log(bob.name); // "Bob"
+```
+
+**ES6 클래스**:
+```javascript
+class Person {
+  constructor(name, age) {
+    this.name = name;
+    this.age = age;
+  }
+
+  introduce() {
+    console.log(`제 이름은 ${this.name}이고, ${this.age}살입니다.`);
+  }
+}
+
+// 클래스는 반드시 new로 호출해야 함
+const alice = new Person('Alice', 25);
+alice.introduce(); // "제 이름은 Alice이고, 25살입니다."
+
+// new 없이 호출하면 에러
+const bob = Person('Bob', 30);
+// TypeError: Class constructor Person cannot be invoked without 'new'
+```
+
+---
+
+### 규칙 5: 화살표 함수의 어휘적 this (Lexical this)
+
+**조건**: 화살표 함수(`=>`)를 사용할 때
+
+**결과**: 함수가 **정의된 위치**의 상위 스코프 `this`를 사용 (호출 방식 무관)
+
+```javascript
+const person = {
+  name: 'Alice',
+  friends: ['Bob', 'Charlie'],
+
+  // 일반 함수
+  printFriendsOld: function() {
+    this.friends.forEach(function(friend) {
+      // ❌ this는 전역 객체 또는 undefined
+      console.log(`${this.name}의 친구: ${friend}`);
+    });
+  },
+
+  // 화살표 함수
+  printFriends: function() {
+    this.friends.forEach(friend => {
+      // ✅ this는 person 객체
+      console.log(`${this.name}의 친구: ${friend}`);
+    });
+  }
+};
+
+person.printFriendsOld();
+// "undefined의 친구: Bob"
+// "undefined의 친구: Charlie"
+
+person.printFriends();
+// "Alice의 친구: Bob"
+// "Alice의 친구: Charlie"
+```
+
+**화살표 함수의 특징**:
+
+1. 자체 `this`가 없음 (상위 스코프의 `this`를 사용)
+2. `call`, `apply`, `bind`로 `this`를 변경할 수 없음
+3. 생성자 함수로 사용할 수 없음 (`new` 불가)
+
+```javascript
+const obj = {
+  value: 42,
+  arrow: () => {
+    console.log(this.value);
+  },
+  regular: function() {
+    console.log(this.value);
+  }
+};
+
+obj.arrow(); // undefined (전역 스코프의 this)
+obj.regular(); // 42 (obj의 this)
+
+// call로 this 변경 시도
+const newObj = { value: 100 };
+obj.arrow.call(newObj); // undefined (변경 불가)
+obj.regular.call(newObj); // 100 (변경됨)
+```
+
+**실무 활용: React 클래스 컴포넌트**:
+```javascript
+class Counter extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { count: 0 };
+    // bind 필요 없음!
+  }
+
+  // 화살표 함수로 정의 (클래스 필드)
+  increment = () => {
+    this.setState({ count: this.state.count + 1 });
+  }
+
+  render() {
+    return (
+      <div>
+        <p>Count: {this.state.count}</p>
+        {/* this가 자동으로 바인딩됨 */}
+        <button onClick={this.increment}>증가</button>
+      </div>
+    );
+  }
+}
+```
+
+---
+
+## 바인딩 우선순위
+
+여러 규칙이 동시에 적용 가능한 경우 우선순위에 따라 결정됩니다.
+
+**우선순위 (높음 → 낮음)**:
+1. 화살표 함수 (어휘적 this)
+2. `new` 바인딩
+3. 명시적 바인딩 (`call`, `apply`, `bind`)
+4. 암시적 바인딩 (메서드 호출)
+5. 기본 바인딩 (단독 함수 호출)
+
+```javascript
+function Person(name) {
+  this.name = name;
+}
+
+const obj = {
+  name: 'Object Name'
+};
+
+// 1. new vs 명시적 바인딩
+const boundPerson = Person.bind(obj); // obj로 bind
+const instance = new boundPerson('Alice'); // new가 우선
+console.log(instance.name); // "Alice" (new가 이김)
+console.log(obj.name); // "Object Name" (변경 안됨)
+
+// 2. 명시적 바인딩 vs 암시적 바인딩
+const person = {
+  name: 'Bob',
+  greet: function() {
+    console.log(this.name);
+  }
+};
+
+const anotherObj = { name: 'Charlie' };
+person.greet.call(anotherObj); // "Charlie" (명시적이 이김)
+
+// 3. 화살표 함수 (최우선)
+const arrow = {
+  name: 'Arrow',
+  greet: () => {
+    console.log(this.name);
+  }
+};
+
+const target = { name: 'Target' };
+arrow.greet.call(target); // undefined (화살표 함수는 변경 불가)
+```
+
+---
+
+## 실전 예제: this 문제 해결하기
+
+### 예제 1: 이벤트 핸들러
+
+```javascript
+// ❌ 문제: this가 엉뚱한 곳을 가리킴
+class Button {
+  constructor(label) {
+    this.label = label;
+    this.clickCount = 0;
+  }
+
+  handleClick() {
+    this.clickCount++;
+    console.log(`${this.label} 버튼이 ${this.clickCount}번 클릭되었습니다.`);
+  }
+}
+
+const button = new Button('제출');
+document.querySelector('#btn').addEventListener('click', button.handleClick);
+// 클릭 시: "undefined 버튼이 NaN번 클릭되었습니다."
+// this가 button이 아니라 DOM 요소를 가리킴!
+
+// ✅ 해결 방법 1: bind 사용
+document.querySelector('#btn').addEventListener(
+  'click',
+  button.handleClick.bind(button)
+);
+
+// ✅ 해결 방법 2: 화살표 함수
+document.querySelector('#btn').addEventListener(
+  'click',
+  () => button.handleClick()
+);
+
+// ✅ 해결 방법 3: 클래스 필드 화살표 함수
+class ButtonFixed {
+  constructor(label) {
+    this.label = label;
+    this.clickCount = 0;
+  }
+
+  // 화살표 함수로 정의
+  handleClick = () => {
+    this.clickCount++;
+    console.log(`${this.label} 버튼이 ${this.clickCount}번 클릭되었습니다.`);
+  }
+}
+
+const buttonFixed = new ButtonFixed('제출');
+document.querySelector('#btn').addEventListener('click', buttonFixed.handleClick);
+// 정상 동작!
+```
+
+### 예제 2: setTimeout/setInterval
+
+```javascript
+const timer = {
+  seconds: 0,
+
+  // ❌ 일반 함수: this가 전역 객체
+  startWrong: function() {
+    setInterval(function() {
+      this.seconds++; // this는 window (전역 객체)
+      console.log(this.seconds);
+    }, 1000);
+  },
+
+  // ✅ 화살표 함수: this가 timer 객체
+  start: function() {
+    setInterval(() => {
+      this.seconds++; // this는 timer
+      console.log(this.seconds);
+    }, 1000);
+  },
+
+  // ✅ bind 사용
+  startWithBind: function() {
+    setInterval(function() {
+      this.seconds++;
+      console.log(this.seconds);
+    }.bind(this), 1000);
+  }
+};
+
+timer.start(); // 1, 2, 3, 4, ...
+```
+
+### 예제 3: 배열 메서드
+
+```javascript
+const calculator = {
+  base: 10,
+
+  // ❌ 일반 함수: this 손실
+  addWrong: function(numbers) {
+    return numbers.map(function(num) {
+      return num + this.base; // this는 undefined
+    });
+  },
+
+  // ✅ 화살표 함수
+  add: function(numbers) {
+    return numbers.map(num => num + this.base);
+  },
+
+  // ✅ thisArg 인자 사용
+  addWithThisArg: function(numbers) {
+    return numbers.map(function(num) {
+      return num + this.base;
+    }, this); // 두 번째 인자로 this 전달
+  }
+};
+
+console.log(calculator.add([1, 2, 3])); // [11, 12, 13]
+console.log(calculator.addWithThisArg([1, 2, 3])); // [11, 12, 13]
+```
+
+---
+
+## this 디버깅 팁
+
+### 1. console.log로 확인
+
+```javascript
+function checkThis() {
+  console.log('this는:', this);
+  console.log('this의 타입:', typeof this);
+  console.log('this === window?', this === window);
+}
+
+checkThis();
+```
+
+### 2. 디버거 사용
+
+```javascript
+function introduce() {
+  debugger; // 브라우저 개발자 도구가 열리며 일시 중지
+  console.log(this.name);
+}
+
+const person = { name: 'Alice', introduce };
+person.introduce();
+```
+
+### 3. 엄격 모드 활성화
+
+```javascript
+'use strict';
+
+function test() {
+  console.log(this); // undefined (전역 객체 대신)
+}
+
+test(); // this 문제를 조기에 발견
+```
+
+---
+
+## 자주 하는 실수와 해결책
+
+### 실수 1: 메서드를 변수에 할당
+
+```javascript
+const person = {
+  name: 'Alice',
+  greet() {
+    console.log(`안녕, ${this.name}`);
+  }
+};
+
+// ❌ 암시적 바인딩 손실
+const greet = person.greet;
+greet(); // "안녕, undefined"
+
+// ✅ bind로 고정
+const greetBound = person.greet.bind(person);
+greetBound(); // "안녕, Alice"
+
+// ✅ 화살표 함수로 감싸기
+const greetArrow = () => person.greet();
+greetArrow(); // "안녕, Alice"
+```
+
+### 실수 2: 콜백에서 this 손실
+
+```javascript
+class DataLoader {
+  constructor() {
+    this.data = [];
+  }
+
+  // ❌ this 손실
+  loadWrong() {
+    fetch('/api/data')
+      .then(function(response) {
+        return response.json();
+      })
+      .then(function(data) {
+        this.data = data; // this는 undefined 또는 window
+      });
+  }
+
+  // ✅ 화살표 함수 사용
+  load() {
+    fetch('/api/data')
+      .then(response => response.json())
+      .then(data => {
+        this.data = data; // this는 DataLoader 인스턴스
+      });
+  }
+}
+```
+
+### 실수 3: 중첩된 함수에서 this 접근
+
+```javascript
+const obj = {
+  value: 42,
+
+  // ❌ 중첩 함수에서 this 손실
+  wrongMethod: function() {
+    function nested() {
+      console.log(this.value); // undefined
+    }
+    nested();
+  },
+
+  // ✅ 화살표 함수
+  correctMethod: function() {
+    const nested = () => {
+      console.log(this.value); // 42
+    };
+    nested();
+  },
+
+  // ✅ that/self 패턴 (레거시)
+  legacyMethod: function() {
+    const that = this; // this를 변수에 저장
+    function nested() {
+      console.log(that.value); // 42
+    }
+    nested();
+  }
+};
+```
+
+---
+
+## 모던 JavaScript에서의 this
+
+### ES6+ 권장 사항
+
+1. **클래스 필드로 메서드 정의** (화살표 함수)
+```javascript
+class Counter {
+  count = 0;
+
+  // 화살표 함수로 정의
+  increment = () => {
+    this.count++;
+  }
+}
+```
+
+2. **일반 함수보다 화살표 함수 우선**
+```javascript
+// ✅ 추천
+const numbers = [1, 2, 3];
+const doubled = numbers.map(n => n * 2);
+
+// ❌ 비추천 (불필요한 bind)
+const doubled2 = numbers.map(function(n) {
+  return n * 2;
+}.bind(this));
+```
+
+3. **명시적 바인딩 최소화**
+```javascript
+// ❌ 복잡함
+const boundMethod = obj.method.bind(obj);
+
+// ✅ 단순함
+class MyClass {
+  method = () => {
+    // 자동으로 바인딩됨
+  }
+}
+```
+
+---
+
+## 요약
+
+### 핵심 개념
+- `this`는 함수 호출 방식에 따라 달라짐
+- 5가지 바인딩 규칙: 기본, 암시적, 명시적, new, 화살표 함수
+- 화살표 함수는 상위 스코프의 `this`를 사용 (호출 방식 무관)
+
+### 실무 팁
+- 이벤트 핸들러: `bind()` 또는 화살표 함수 사용
+- 콜백 함수: 화살표 함수로 `this` 유지
+- 클래스: 클래스 필드 화살표 함수 사용
+- 디버깅: `console.log(this)`로 확인
+
+### 체크리스트
+- [ ] `this`가 가리키는 대상을 파악했는가?
+- [ ] 콜백에서 `this` 손실이 발생하지 않는가?
+- [ ] 화살표 함수와 일반 함수를 적절히 사용했는가?
+- [ ] 불필요한 `bind`를 사용하지 않았는가?
+
+---
+
+## 다음 단계
+
+### 심화 학습
+- [JavaScript 클로저 이해하기](./javascript-closures.md)
+- [프로토타입과 상속](./javascript-prototypes.md)
+- [실행 컨텍스트와 스코프 체인](./execution-context.md)
+
+### 실전 연습
+- React 클래스 컴포넌트에서 `this` 바인딩 연습
+- 다양한 바인딩 규칙이 적용되는 코드 작성
+- `this` 관련 버그 찾기 및 수정하기
+
+---
+
+## 참고 자료
+
+- [MDN: this](https://developer.mozilla.org/ko/docs/Web/JavaScript/Reference/Operators/this)
+- [You Don't Know JS: this & Object Prototypes](https://github.com/getify/You-Dont-Know-JS)
+- [JavaScript.info: Function binding](https://javascript.info/bind)

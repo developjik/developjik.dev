@@ -1,0 +1,30 @@
+---
+import type { Post } from '~/lib/posts';
+import { formatDate, readingMinutes } from '~/lib/posts';
+
+interface Props {
+  post: Post;
+  index?: number;
+  showTags?: boolean;
+}
+const { post, index, showTags = true } = Astro.props;
+const minutes = readingMinutes(post.body ?? '');
+---
+
+<article class="timeline-item group py-3">
+  <div class="flex items-baseline gap-4">
+    <time class="tabular shrink-0 font-mono text-xs text-faint group-hover:text-accent" datetime={post.data.date.toISOString()}>
+      {formatDate(post.data.date)}
+    </time>
+    <a href={'/posts/' + post.id} class="min-w-0 flex-1 truncate font-[550] leading-relaxed transition-colors group-hover:text-accent">
+      {post.data.title}
+    </a>
+    <span class="hidden shrink-0 font-mono text-[0.68rem] text-faint sm:inline">{minutes}분</span>
+    {index !== undefined && <span class="hidden shrink-0 font-mono text-[0.68rem] text-faint md:inline">#{String(index).padStart(2, '0')}</span>}
+  </div>
+  {showTags && post.data.tags.length > 0 && (
+    <div class="mt-1.5 flex flex-wrap gap-1 pl-[calc(3.4rem+1.4rem)] max-sm:pl-0">
+      {post.data.tags.slice(0, 4).map((t) => <span class="chip !px-2 !py-0 !text-[0.65rem]">{t}</span>)}
+    </div>
+  )}
+</article>

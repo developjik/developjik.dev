@@ -1,0 +1,44 @@
+---
+import type { Post } from '~/lib/posts';
+import { formatDate, seriesIdOf, SERIES } from '~/lib/posts';
+
+interface Props {
+  post: Post;
+  minutes: number;
+  featured?: boolean;
+}
+const { post, minutes, featured = false } = Astro.props;
+const series = seriesIdOf(post.id) ? SERIES[seriesIdOf(post.id)!] : undefined;
+---
+
+<article class:list={['card card-hover group relative flex flex-col p-6', featured && 'md:p-7']} data-reveal>
+  <div class="meta-row mb-3">
+    <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
+    <span aria-hidden>·</span>
+    <span>{minutes} min read</span>
+    {series && (
+      <span class="ml-auto inline-flex items-center gap-1 rounded-full border border-line bg-accent-soft px-2 py-0.5 text-[0.65rem] font-semibold tracking-wide text-accent">
+        {series.short}
+      </span>
+    )}
+  </div>
+
+  <h3 class:list={['font-display font-bold leading-snug tracking-tight', featured ? 'text-[1.35rem]' : 'text-[1.1rem]']}>
+    <a href={'/posts/' + post.id} class="transition-colors group-hover:text-accent">
+      {post.data.title}
+    </a>
+  </h3>
+
+  {post.data.description && (
+    <p class="mt-2.5 line-clamp-2 text-[0.88rem] leading-relaxed text-soft">{post.data.description}</p>
+  )}
+
+  <div class="mt-auto flex items-center justify-between pt-5">
+    <div class="flex flex-wrap gap-1.5">
+      {post.data.tags.slice(0, featured ? 3 : 2).map((t) => (
+        <span class="chip">{t}</span>
+      ))}
+    </div>
+    <span class="font-mono text-sm text-faint transition-all group-hover:translate-x-0.5 group-hover:text-accent" aria-hidden>→</span>
+  </div>
+</article>

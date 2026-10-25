@@ -1,0 +1,46 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import PostRow from '~/components/PostRow.astro';
+import { getAllPosts, tagSlug } from '~/lib/posts';
+
+export async function getStaticPaths() {
+  const posts = await getAllPosts();
+  const tags = new Set<string>();
+  for (const p of posts) for (const t of p.data.tags) tags.add(t);
+  return [...tags].map((tag) => ({ params: { tag: tagSlug(tag) }, props: { tag } }));
+}
+
+const { tag } = Astro.props;
+const posts = await getAllPosts();
+const filtered = posts.filter((p) => p.data.tags.includes(tag));
+const otherTags = tagCountsTop(posts, tag);
+function tagCountsTop(all: typeof posts, exclude: string): Array<[string, number]> {
+  const map = new Map<string, number>();
+  for (const p of all.filter((x) => x.data.tags.includes(exclude))) {
+    for (const t of p.data.tags) if (t !== exclude) map.set(t, (map.get(t) ?? 0) + 1);
+  }
+  return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+}
+---
+
+<BaseLayout title={'#' + tag} description={tag + ' 태그의 글 ' + filtered.length + '편 — developjik 블로그.'}>
+  <div class="shell py-14 md:py-20">
+    <header class="mb-10" data-reveal>
+      <p class="kicker mb-3">Tag</p>
+      <h1 class="font-display text-4xl font-bold tracking-tight md:text-5xl">#{tag}</h1>
+      <p class="mt-4 font-mono text-sm text-faint tabular">{filtered.length} posts</p>
+      {otherTags.length > 0 && (
+        <div class="mt-6 flex flex-wrap items-center gap-1.5">
+          <span class="font-mono text-xs text-faint">함께 언급:</span>
+          {otherTags.map(([t, n]) => (
+            <a href={'/tags/' + tagSlug(t)} class="chip">{t} <span class="tabular opacity-60">{n}</span></a>
+          ))}
+        </div>
+      )}
+    </header>
+
+    <div class="timeline-rail ml-1" data-reveal>
+      {filtered.map((p) => <PostRow post={p} />)}
+    </div>
+  </div>
+</BaseLayout>

@@ -1,0 +1,33 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="404 — 페이지를 찾을 수 없습니다" description="요청한 페이지가 없습니다.">
+  <div class="shell flex min-h-[60vh] max-w-2xl flex-col justify-center py-20">
+    <div class="terminal" data-reveal>
+      <div class="terminal-bar">
+        <span class="terminal-dot" style="background:#ff5f57"></span>
+        <span class="terminal-dot" style="background:#febc2e"></span>
+        <span class="terminal-dot" style="background:#28c840"></span>
+        <span class="ml-2 text-[0.68rem] text-faint">zsh — developjik.dev</span>
+      </div>
+      <div class="terminal-body">
+        <div><span class="cmd">$</span> open {Astro.url.pathname}</div>
+        <div class="out" style="color: var(--warn)">zsh: command not found — 404 page not found</div>
+        <div><span class="cmd">$</span> <span class="caret"></span></div>
+      </div>
+    </div>
+
+    <h1 class="mt-10 font-display text-3xl font-bold tracking-tight md:text-4xl" data-reveal>
+      이 페이지는 존재하지 않습니다
+    </h1>
+    <p class="mt-4 text-soft" data-reveal>
+      옮겨지거나 삭제된 주소예요. 아래에서 다시 찾아보시겠어요?
+    </p>
+    <div class="mt-8 flex flex-wrap gap-3" data-reveal>
+      <a href="/" class="btn btn-primary">홈으로</a>
+      <a href="/posts" class="btn">전체 글</a>
+      <button type="button" class="btn" data-open-palette>검색 <span class="kbd">⌘K</span></button>
+    </div>
+  </div>
+</BaseLayout>

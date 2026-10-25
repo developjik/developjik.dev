@@ -1,0 +1,419 @@
+---
+title: 'JavaScript 이벤트 루프 이해하기'
+date: '2024-12-10'
+description: 'JavaScript 이벤트 루프의 동작 원리와 비동기 처리 메커니즘에 대한 완벽한 가이드'
+tags: ['JavaScript', 'Event Loop', 'Async', 'Concurrency']
+---
+
+# JavaScript 이벤트 루프 이해하기
+
+## 개요
+
+JavaScript 이벤트 루프는 비동기 작업을 처리하는 핵심 메커니즘입니다. 단일 스레드 환경에서 동시성을 구현하여, 블로킹 없이 여러 작업을 효율적으로 처리할 수 있게 합니다.
+
+## 배경
+
+### 왜 필요한가?
+
+JavaScript는 단일 스레드 언어입니다. 즉, 한 번에 하나의 작업만 실행할 수 있습니다. 만약 네트워크 요청이나 파일 읽기 같은 시간이 오래 걸리는 작업을 동기적으로 처리한다면, 그 작업이 완료될 때까지 전체 애플리케이션이 멈추게 됩니다.
+
+브라우저에서 사용자가 버튼을 클릭했는데 3초간 API 응답을 기다리는 동안 화면이 얼어붙는 상황을 상상해보세요. 이것이 바로 이벤트 루프가 해결하려는 문제입니다.
+
+### 등장 이전의 방식
+
+초기 JavaScript는 모든 작업을 순차적으로 처리했습니다. 시간이 오래 걸리는 작업이 있으면 사용자 인터페이스가 응답하지 않는 문제가 빈번했습니다. 개발자들은 이를 해결하기 위해 복잡한 워커 스레드나 폴링 메커니즘을 직접 구현해야 했습니다.
+
+## 동작 원리
+
+### 핵심 메커니즘
+
+이벤트 루프는 다음과 같은 단계로 동작합니다:
+
+1. **콜 스택 실행**: 현재 실행 중인 함수를 처리합니다
+2. **마이크로태스크 큐 확인**: Promise 같은 마이크로태스크를 처리합니다
+3. **매크로태스크 큐 확인**: setTimeout, setInterval 같은 작업을 처리합니다
+4. **반복**: 1번부터 다시 시작합니다
+
+### 시각적 예시
+
+```
+[실행 흐름]
+
+   Call Stack                 Web APIs              Task Queues
+   ┌─────────┐                                     ┌──────────────┐
+   │ main()  │                                     │ Microtasks   │
+   └─────────┘                                     │  - Promise   │
+       ↓                                           └──────────────┘
+   ┌─────────┐              ┌──────────┐          ┌──────────────┐
+   │ fetch() │  ─────────→  │ XHR      │          │ Macrotasks   │
+   └─────────┘              └──────────┘          │  - setTimeout│
+       ↓                         │                │  - setInterval│
+   ┌─────────┐                  │                 └──────────────┘
+   │ console │                  ↓                        ↓
+   └─────────┘              [완료 시]  ──────────→   [큐에 추가]
+                                                         ↓
+                            ← ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+                         [콜 스택이 비면 큐에서 가져옴]
+```
+
+### 코드로 이해하기
+
+```javascript
+console.log('1: 동기 코드 시작');
+
+setTimeout(() => {
+  console.log('2: setTimeout (매크로태스크)');
+}, 0);
+
+Promise.resolve()
+  .then(() => {
+    console.log('3: Promise (마이크로태스크)');
+  });
+
+console.log('4: 동기 코드 끝');
+
+// 실행 결과:
+// 1: 동기 코드 시작
+// 4: 동기 코드 끝
+// 3: Promise (마이크로태스크)
+// 2: setTimeout (매크로태스크)
+```
+
+**왜 이런 순서일까요?**
+
+1. 먼저 콜 스택의 모든 동기 코드가 실행됩니다 (1, 4)
+2. 콜 스택이 비면 마이크로태스크 큐를 확인합니다 (3)
+3. 마이크로태스크를 모두 처리한 후 매크로태스크를 확인합니다 (2)
+
+## 주요 특징
+
+### 특징 1: 논블로킹 I/O
+
+비동기 작업이 완료될 때까지 기다리지 않고 다른 작업을 계속 수행할 수 있습니다.
+
+```javascript
+// 논블로킹 방식
+console.log('요청 시작');
+
+fetch('https://api.example.com/data')
+  .then(response => response.json())
+  .then(data => console.log('데이터:', data));
+
+console.log('다른 작업 수행 가능');
+
+// 출력:
+// 요청 시작
+// 다른 작업 수행 가능
+// 데이터: {...}
+```
+
+### 특징 2: 작업 우선순위
+
+마이크로태스크는 매크로태스크보다 높은 우선순위를 가집니다.
+
+```javascript
+setTimeout(() => console.log('매크로태스크'), 0);
+
+Promise.resolve()
+  .then(() => console.log('마이크로태스크 1'))
+  .then(() => console.log('마이크로태스크 2'));
+
+// 출력:
+// 마이크로태스크 1
+// 마이크로태스크 2
+// 매크로태스크
+```
+
+### 특징 3: 단일 스레드 보장
+
+한 번에 하나의 작업만 실행되므로 동시성 문제(race condition)가 발생하지 않습니다.
+
+```javascript
+let counter = 0;
+
+// 동시에 여러 비동기 작업을 실행해도
+// 순차적으로 처리되어 안전합니다
+for (let i = 0; i < 1000; i++) {
+  Promise.resolve().then(() => {
+    counter++;
+  });
+}
+
+// counter는 항상 1000이 됩니다
+```
+
+## 실제 사용 사례
+
+### 사례 1: API 호출 처리
+
+```javascript
+async function fetchUserData(userId) {
+  try {
+    console.log('데이터 요청 시작');
+    
+    // 네트워크 요청은 Web API에서 처리됩니다
+    const response = await fetch(`/api/users/${userId}`);
+    const data = await response.json();
+    
+    // 데이터 처리
+    console.log('사용자 정보:', data.name);
+    return data;
+  } catch (error) {
+    console.error('오류 발생:', error);
+    return null;
+  }
+}
+
+// 다른 작업을 블로킹하지 않습니다
+fetchUserData(123);
+console.log('다른 작업 계속 수행');
+```
+
+### 사례 2: 애니메이션 처리
+
+```javascript
+function smoothScroll(targetY, duration) {
+  const startY = window.scrollY;
+  const distance = targetY - startY;
+  const startTime = performance.now();
+  
+  function scroll() {
+    const currentTime = performance.now();
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    
+    window.scrollTo(0, startY + distance * progress);
+    
+    if (progress < 1) {
+      // requestAnimationFrame도 이벤트 루프를 활용합니다
+      requestAnimationFrame(scroll);
+    }
+  }
+  
+  requestAnimationFrame(scroll);
+}
+
+// 사용
+smoothScroll(1000, 500);
+```
+
+### 사례 3: 이벤트 핸들링
+
+```javascript
+const button = document.getElementById('submit');
+
+button.addEventListener('click', async () => {
+  // 1. 동기 코드: 버튼 비활성화
+  button.disabled = true;
+  button.textContent = '처리 중...';
+  
+  // 2. 비동기 작업: API 호출
+  try {
+    const result = await submitForm();
+    
+    // 3. UI 업데이트
+    showSuccess(result);
+  } catch (error) {
+    showError(error);
+  } finally {
+    // 4. 정리 작업
+    button.disabled = false;
+    button.textContent = '제출';
+  }
+});
+
+// 사용자는 버튼을 클릭한 후에도
+// 페이지의 다른 부분과 상호작용할 수 있습니다
+```
+
+## 장점과 한계
+
+### 장점
+
+- ✅ **간단한 프로그래밍 모델**: 복잡한 멀티스레딩 없이 비동기 처리 가능
+- ✅ **경량**: 스레드를 생성하지 않아 메모리 효율적
+- ✅ **동시성 문제 방지**: 단일 스레드로 race condition 자동 방지
+- ✅ **높은 처리량**: I/O 대기 시간 동안 다른 작업 수행 가능
+
+### 한계
+
+- ⚠️ **CPU 집약적 작업**: 오랜 시간이 걸리는 계산은 전체를 블로킹
+- ⚠️ **콜백 지옥**: 중첩된 비동기 코드는 복잡해질 수 있음 (async/await로 개선)
+- ⚠️ **에러 처리**: 비동기 에러는 try-catch로 잡기 어려움 (Promise 필요)
+
+### 트레이드오프
+
+**이벤트 루프를 사용해야 하는 경우:**
+- 네트워크 요청이 많은 웹 애플리케이션
+- 실시간 데이터 처리 (웹소켓, SSE)
+- I/O 작업이 많은 서버 애플리케이션 (Node.js)
+
+**주의해야 하는 경우:**
+- 복잡한 수학 계산
+- 대용량 데이터 처리
+- 이미지/비디오 처리
+
+이런 경우 Web Worker나 Worker Thread를 활용하세요:
+
+```javascript
+// Web Worker를 사용한 CPU 집약적 작업
+const worker = new Worker('calculation-worker.js');
+
+worker.postMessage({ numbers: largeArray });
+
+worker.onmessage = (event) => {
+  console.log('계산 결과:', event.data);
+};
+
+// 메인 스레드는 블로킹되지 않습니다
+```
+
+## 일반적인 실수와 해결책
+
+### 실수 1: 무한 루프 발생
+
+```javascript
+// ❌ 잘못된 코드: 이벤트 루프를 블로킹합니다
+function infiniteLoop() {
+  while (true) {
+    // 콜 스택이 비지 않아 다른 작업이 실행되지 않음
+  }
+}
+
+// ✅ 올바른 코드: 이벤트 루프를 활용합니다
+function processChunks(data) {
+  const chunkSize = 1000;
+  let index = 0;
+  
+  function processNextChunk() {
+    const end = Math.min(index + chunkSize, data.length);
+    
+    for (; index < end; index++) {
+      // 청크 처리
+      processItem(data[index]);
+    }
+    
+    if (index < data.length) {
+      // 다음 청크는 이벤트 루프를 통해 처리
+      setTimeout(processNextChunk, 0);
+    }
+  }
+  
+  processNextChunk();
+}
+```
+
+### 실수 2: 마이크로태스크 폭발
+
+```javascript
+// ❌ 잘못된 코드: 무한 마이크로태스크
+function badRecursion() {
+  Promise.resolve().then(() => {
+    console.log('실행');
+    badRecursion(); // 매크로태스크가 실행될 기회가 없음
+  });
+}
+
+// ✅ 올바른 코드: 매크로태스크 사용
+function goodRecursion() {
+  setTimeout(() => {
+    console.log('실행');
+    goodRecursion(); // 다른 작업이 실행될 기회가 있음
+  }, 0);
+}
+```
+
+### 실수 3: async 함수의 동기적 부분 오해
+
+```javascript
+// async 함수도 첫 await까지는 동기적으로 실행됩니다
+async function example() {
+  console.log('1: 동기 실행');
+  
+  await Promise.resolve();
+  
+  console.log('2: 비동기 실행');
+}
+
+console.log('3: 시작');
+example();
+console.log('4: 끝');
+
+// 출력:
+// 3: 시작
+// 1: 동기 실행
+// 4: 끝
+// 2: 비동기 실행
+```
+
+## 관련 개념
+
+### 유사 개념
+
+- **Run-to-completion**: JavaScript의 실행 모델로, 각 작업은 중단 없이 완전히 실행됨
+- **Concurrency Model**: 이벤트 루프는 JavaScript의 동시성 모델을 구현하는 방법
+
+### 대안
+
+- **Multi-threading**: 진정한 병렬 처리가 필요할 때
+  - Node.js: Worker Threads
+  - 브라우저: Web Workers
+  - 장점: CPU 집약적 작업에 효과적
+  - 단점: 메모리 오버헤드, 복잡한 동기화
+
+- **Async/Await**: 이벤트 루프를 더 쉽게 활용
+  - Promise 기반의 syntactic sugar
+  - 더 읽기 쉬운 비동기 코드
+
+## 디버깅 팁
+
+### 1. 콘솔로 실행 순서 확인
+
+```javascript
+console.log('1: 동기');
+
+setTimeout(() => console.log('2: 매크로'), 0);
+
+Promise.resolve()
+  .then(() => console.log('3: 마이크로'));
+
+queueMicrotask(() => console.log('4: 마이크로 (직접)'));
+
+console.log('5: 동기');
+```
+
+### 2. Performance API 활용
+
+```javascript
+async function measureAsync() {
+  const start = performance.now();
+  
+  await fetch('/api/data');
+  
+  const end = performance.now();
+  console.log(`실행 시간: ${end - start}ms`);
+}
+```
+
+### 3. Chrome DevTools 활용
+
+브라우저 개발자 도구의 Performance 탭에서 이벤트 루프의 동작을 시각적으로 확인할 수 있습니다:
+- Task 실행 시간
+- Long Task 경고
+- 마이크로태스크/매크로태스크 구분
+
+## 더 알아보기
+
+**심화 학습**:
+- [Concurrency Model and Event Loop (MDN)](https://developer.mozilla.org/en-US/docs/Web/JavaScript/EventLoop)
+- [What the heck is the event loop anyway? (JSConf)](https://www.youtube.com/watch?v=8aGhZQkoFbQ)
+- [Node.js Event Loop Guide](https://nodejs.org/en/docs/guides/event-loop-timers-and-nexttick)
+
+**실습**:
+- [JavaScript Visualizer](http://latentflip.com/loupe/) - 이벤트 루프 시각화 도구
+- [Tasks, microtasks, queues and schedules (Jake Archibald)](https://jakearchibald.com/2015/tasks-microtasks-queues-and-schedules/)
+
+**관련 자료**:
+- [Node.js의 이벤트 루프](https://nodejs.org/en/docs/guides/event-loop-timers-and-nexttick)
+- [브라우저 렌더링과 이벤트 루프](https://developer.mozilla.org/en-US/docs/Web/Performance/How_browsers_work)
+- [Web Workers API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API)

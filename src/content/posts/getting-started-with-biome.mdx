@@ -1,0 +1,443 @@
+---
+title: 'Biome 시작하기'
+description: 'Biome는 Rust로 작성된 고성능 JavaScript/TypeScript 린터 및 포매터로, ESLint와 Prettier를 단일 도구로 대체할 수 있습니다. 이 튜토리얼을 완료하면 프로젝트에 Biome를 설정하고, 코드를 자동으로 포맷하고 린트하는 방법을 익힐 수 있습니다.'
+date: '2026-02-08'
+tags:
+  - 'Biome'
+  - 'JavaScript'
+  - 'TypeScript'
+  - 'Linting'
+  - 'Formatting'
+  - '가이드'
+  - '완벽 가이드'
+---
+
+# Biome 시작하기
+
+Biome는 Rust로 작성된 고성능 JavaScript/TypeScript 린터 및 포매터로, ESLint와 Prettier를 단일 도구로 대체할 수 있습니다. 이 튜토리얼을 완료하면 프로젝트에 Biome를 설정하고, 코드를 자동으로 포맷하고 린트하는 방법을 익힐 수 있습니다.
+
+## 사전 준비
+
+- Node.js 18 이상
+- npm, yarn, 또는 pnpm
+- 기존 JavaScript 또는 TypeScript 프로젝트
+
+## 왜 Biome를 선택해야 할까?
+
+### 성능
+Biome는 Prettier보다 최대 25배 빠르며, ESLint와 Prettier를 합친 것보다 훨씬 빠릅니다. 실제 벤치마크에서 Biome는 783ms에 작업을 완료한 반면, ESLint와 Prettier는 13초가 걸렸습니다.
+
+### 단순성
+하나의 도구로 린팅과 포맷팅을 모두 처리할 수 있어, 여러 설정 파일(.eslintrc, .prettierrc 등)을 관리할 필요가 없습니다.
+
+### 호환성
+Prettier와 97% 호환되므로, 기존 코드 스타일을 거의 그대로 유지할 수 있습니다.
+
+## 1단계: Biome 설치
+
+프로젝트 디렉토리에서 다음 명령어를 실행하세요:
+
+```bash
+npm install --save-dev --save-exact @biomejs/biome
+```
+
+`--save-exact` 플래그는 정확한 버전을 설치하여 팀원들 간에 일관된 동작을 보장합니다.
+
+**결과**: `package.json`의 `devDependencies`에 Biome가 추가됩니다.
+
+## 2단계: 초기 설정
+
+Biome 설정 파일을 생성하세요:
+
+```bash
+npx @biomejs/biome init
+```
+
+이 명령어는 프로젝트 루트에 `biome.json` 파일을 생성합니다.
+
+**생성된 파일 내용**:
+```json
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "vcs": {
+    "enabled": false,
+    "clientKind": "git",
+    "useIgnoreFile": false
+  },
+  "files": {
+    "ignoreUnknown": false,
+    "ignore": []
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "tab"
+  },
+  "organizeImports": {
+    "enabled": true
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double"
+    }
+  }
+}
+```
+
+## 3단계: 설정 커스터마이징 (선택사항)
+
+프로젝트에 맞게 `biome.json`을 수정할 수 있습니다. 다음은 일반적인 설정 예시입니다:
+
+```json
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 80
+  },
+  "organizeImports": {
+    "enabled": true
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        "noUnusedImports": "warn",
+        "noUnusedVariables": "error"
+      },
+      "suspicious": {
+        "noConsoleLog": "warn"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always",
+      "trailingComma": "es5",
+      "arrowParentheses": "always"
+    }
+  }
+}
+```
+
+**주요 설정 옵션**:
+- `indentStyle`: "space" 또는 "tab"
+- `indentWidth`: 들여쓰기 너비 (일반적으로 2 또는 4)
+- `lineWidth`: 한 줄의 최대 길이 (기본값: 80)
+- `quoteStyle`: "single" 또는 "double"
+- `semicolons`: "always" 또는 "asNeeded"
+
+## 4단계: package.json 스크립트 추가
+
+`package.json`에 다음 스크립트를 추가하세요:
+
+```json
+{
+  "scripts": {
+    "format": "biome format --write ./src",
+    "lint": "biome lint ./src",
+    "lint:fix": "biome lint --write ./src",
+    "check": "biome check --write ./src"
+  }
+}
+```
+
+**스크립트 설명**:
+- `format`: 코드를 포맷하고 변경사항을 저장
+- `lint`: 린트 문제를 확인 (변경하지 않음)
+- `lint:fix`: 린트 문제를 자동으로 수정
+- `check`: 포맷팅과 린팅을 동시에 수행
+
+## 5단계: 코드 포맷팅 실행
+
+전체 프로젝트를 포맷하세요:
+
+```bash
+npm run format
+```
+
+**주의**: 이 명령어는 실제로 파일을 수정합니다. 실행하기 전에 변경사항을 커밋하거나 백업하는 것을 권장합니다.
+
+**예상 출력**:
+```
+Formatted 47 files in 152ms
+```
+
+## 6단계: 린팅 실행
+
+코드의 문제를 확인하세요:
+
+```bash
+npm run lint
+```
+
+문제가 발견되면 다음과 같은 출력을 볼 수 있습니다:
+
+```
+src/utils/helper.js:15:7 lint/correctness/noUnusedVariables ━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ✖ This variable is unused.
+
+    13 │ export function calculateTotal(items) {
+    14 │   let total = 0;
+  > 15 │   let count = 0;
+       │       ^^^^^
+    16 │
+    17 │   items.forEach(item => {
+```
+
+자동으로 수정 가능한 문제를 해결하려면:
+
+```bash
+npm run lint:fix
+```
+
+## 7단계: VSCode 통합 설정
+
+VSCode에서 Biome를 사용하려면 다음을 수행하세요:
+
+1. **Biome 확장 설치**:
+   - VSCode Extensions에서 "Biome" 검색
+   - `biomejs.biome` 설치
+
+2. **워크스페이스 설정 추가**:
+
+`.vscode/settings.json` 파일을 생성하고 다음을 추가하세요:
+
+```json
+{
+  "[javascript][javascriptreact][typescript][typescriptreact][json][jsonc]": {
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "quickfix.biome": "explicit",
+      "source.organizeImports.biome": "explicit"
+    }
+  }
+}
+```
+
+**결과**: 파일을 저장할 때마다 자동으로 포맷팅과 import 정리가 실행됩니다.
+
+## 8단계: Git 통합 (선택사항)
+
+`.gitignore`에 Biome 관련 파일을 추가할 필요는 없지만, `biome.json`은 커밋해야 합니다.
+
+Git pre-commit 훅을 설정하려면 Husky와 함께 사용할 수 있습니다:
+
+```bash
+npm install --save-dev husky lint-staged
+npx husky init
+```
+
+`.husky/pre-commit` 파일에 다음을 추가:
+
+```bash
+npx lint-staged
+```
+
+`package.json`에 lint-staged 설정 추가:
+
+```json
+{
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,json}": [
+      "biome check --write --no-errors-on-unmatched"
+    ]
+  }
+}
+```
+
+## 9단계: CI/CD 통합
+
+GitHub Actions에서 Biome를 실행하려면 다음 워크플로우를 추가하세요:
+
+`.github/workflows/biome.yml`:
+
+```yaml
+name: Biome Check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  biome:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Biome
+        run: npx @biomejs/biome ci ./src
+```
+
+**중요**: CI에서는 `--write` 플래그를 사용하지 않습니다. 대신 `ci` 명령어를 사용하여 문제만 확인합니다.
+
+## 10단계: 검증 및 확인
+
+모든 설정이 올바르게 작동하는지 확인하세요:
+
+```bash
+npm run check
+```
+
+성공하면 다음과 같이 표시됩니다:
+
+```
+Checked 47 files in 158ms
+No errors found
+```
+
+## 다음 단계
+
+Biome 기본 설정을 완료했습니다! 이제 다음을 탐색해보세요:
+
+- [Biome 공식 문서](https://biomejs.dev) - 모든 규칙과 설정 옵션
+- [규칙 레퍼런스](https://biomejs.dev/linter/rules/) - 411개 이상의 린트 규칙
+- [마이그레이션 가이드](https://biomejs.dev/guides/migrate-from-eslint-prettier/) - ESLint/Prettier에서 마이그레이션
+
+### 추천 다음 작업
+
+1. **특정 규칙 커스터마이징**: 프로젝트에 맞게 린트 규칙을 조정하세요
+2. **Monorepo 설정**: Turborepo나 Nx와 함께 Biome 사용하기
+3. **팀 컨벤션 정립**: 팀과 함께 코드 스타일 가이드 작성
+
+## 문제 해결
+
+### 문제: "Cannot find module @biomejs/biome"
+
+**해결 방법**:
+```bash
+# node_modules 삭제 후 재설치
+rm -rf node_modules package-lock.json
+npm install
+```
+
+### 문제: VSCode에서 포맷팅이 작동하지 않음
+
+**해결 방법**:
+1. Biome 확장이 설치되어 있는지 확인
+2. VSCode를 재시작
+3. `.vscode/settings.json`이 올바른지 확인
+4. 출력 패널에서 "Biome" 로그 확인
+
+### 문제: 특정 파일을 무시하고 싶음
+
+**해결 방법**: `biome.json`에 ignore 패턴 추가
+
+```json
+{
+  "files": {
+    "ignore": [
+      "dist",
+      "build",
+      "node_modules",
+      "**/*.min.js"
+    ]
+  }
+}
+```
+
+## 참고 사항
+
+### ESLint/Prettier와의 차이점
+
+- **타입 체킹**: Biome는 아직 TypeScript 타입 기반 린트 규칙을 완전히 지원하지 않습니다. 복잡한 타입 검사가 필요하다면 `typescript-eslint`를 병행해야 할 수 있습니다.
+- **플러그인 생태계**: ESLint의 방대한 플러그인 생태계는 아직 Biome에 없습니다. 특정 프레임워크용 규칙이 필요하다면 확인이 필요합니다.
+- **설정 포맷**: JSON 기반 설정만 지원하므로, 동적 설정이 필요한 경우 제한적일 수 있습니다.
+
+### 장점 정리
+
+✅ **속도**: Prettier/ESLint보다 훨씬 빠름
+✅ **단순성**: 하나의 도구로 모든 것 처리
+✅ **호환성**: Prettier와 97% 호환
+✅ **의존성 감소**: 9개 이상의 패키지 제거 가능
+✅ **Node.js 불필요**: Rust로 작성되어 독립적으로 실행
+
+### 한계점
+
+⚠️ **타입 체킹**: 고급 TypeScript 타입 규칙 부족
+⚠️ **플러그인**: 제한적인 생태계
+⚠️ **프레임워크 지원**: Vue, Svelte 등 부분 지원
+⚠️ **Markdown**: 현재 미지원
+
+## 추가 팁
+
+### Monorepo에서 사용하기
+
+각 패키지에 개별 `biome.json`을 두거나, 루트에 공통 설정을 두고 패키지별로 확장할 수 있습니다:
+
+```json
+// packages/app/biome.json
+{
+  "extends": ["../../biome.json"],
+  "linter": {
+    "rules": {
+      "suspicious": {
+        "noConsoleLog": "error"
+      }
+    }
+  }
+}
+```
+
+### 점진적 마이그레이션
+
+기존 프로젝트에서는 한 번에 모든 파일을 변경하는 대신, 특정 디렉토리부터 시작할 수 있습니다:
+
+```bash
+# src/components만 포맷팅
+biome format --write ./src/components
+
+# 나머지는 나중에
+biome format --write ./src
+```
+
+### 규칙 무시하기
+
+특정 라인이나 파일에서 규칙을 무시하려면:
+
+```javascript
+// 특정 라인 무시
+// biome-ignore lint/suspicious/noConsoleLog: 디버깅용
+console.log('debug info');
+
+// 파일 전체 무시
+/* biome-ignore */
+```
+
+## 요약
+
+Biome는 현대적인 JavaScript/TypeScript 프로젝트를 위한 강력하고 빠른 도구입니다. 이 튜토리얼을 통해 다음을 배웠습니다:
+
+1. ✅ Biome 설치 및 초기 설정
+2. ✅ 포맷팅과 린팅 실행
+3. ✅ VSCode 통합
+4. ✅ CI/CD 파이프라인 구성
+5. ✅ 일반적인 문제 해결 방법
+
+이제 팀 프로젝트에 Biome를 적용하고, 일관된 코드 품질을 유지하며, 개발 생산성을 높일 수 있습니다!

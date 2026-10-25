@@ -1,0 +1,22 @@
+---
+interface Props {
+  kicker: string;
+  title: string;
+  href?: string;
+  linkLabel?: string;
+}
+const { kicker, title, href, linkLabel = '전체 보기' } = Astro.props;
+---
+
+<div class="mb-8 flex items-end justify-between gap-4" data-reveal>
+  <div>
+    <p class="kicker mb-2">{kicker}</p>
+    <h2 class="font-display text-2xl font-bold tracking-tight md:text-[1.7rem]">{title}</h2>
+  </div>
+  {href && (
+    <a href={href} class="group hidden shrink-0 items-center gap-1 font-mono text-xs text-soft transition-colors hover:text-accent sm:flex">
+      {linkLabel}
+      <span class="transition-transform group-hover:translate-x-0.5" aria-hidden>→</span>
+    </a>
+  )}
+</div>
