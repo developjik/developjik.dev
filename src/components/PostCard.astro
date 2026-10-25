@@ -17,7 +17,7 @@ const series = seriesIdOf(post.id) ? SERIES[seriesIdOf(post.id)!] : undefined;
     <span aria-hidden>·</span>
     <span>{minutes} min read</span>
     {series && (
-      <span class="ml-auto inline-flex items-center gap-1 rounded-full border border-line bg-accent-soft px-2 py-0.5 text-[0.65rem] font-semibold tracking-wide text-accent">
+      <span class="ml-auto inline-flex items-center gap-1 rounded-sm border border-line bg-accent-soft px-2 py-0.5 text-[0.65rem] font-semibold tracking-wide text-accent">
         {series.short}
       </span>
     )}

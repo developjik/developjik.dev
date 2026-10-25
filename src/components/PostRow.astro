@@ -11,12 +11,15 @@ const { post, index, showTags = true } = Astro.props;
 const minutes = readingMinutes(post.body ?? '');
 ---
 
-<article class="timeline-item group py-3">
+<article class="timeline-item group py-3.5">
   <div class="flex items-baseline gap-4">
     <time class="tabular shrink-0 font-mono text-xs text-faint group-hover:text-accent" datetime={post.data.date.toISOString()}>
       {formatDate(post.data.date)}
     </time>
-    <a href={'/posts/' + post.id} class="min-w-0 flex-1 truncate font-[550] leading-relaxed transition-colors group-hover:text-accent">
+    <a
+      href={'/posts/' + post.id}
+      class="min-w-0 flex-1 truncate font-[550] leading-relaxed decoration-accent/60 decoration-1.5 underline-offset-4 transition-colors group-hover:text-accent group-hover:underline"
+    >
       {post.data.title}
     </a>
     <span class="hidden shrink-0 font-mono text-[0.68rem] text-faint sm:inline">{minutes}분</span>

@@ -17,10 +17,14 @@ const isActive = (href: string) => currentPath === href || currentPath.startsWit
 ---
 
 <header class="site-header no-print">
-  <div class="shell flex h-16 items-center justify-between gap-4">
-    <a href="/" class="group flex items-center gap-2.5" aria-label="홈으로">
-      <span class="flex h-8 w-8 items-center justify-center rounded-md bg-accent text-accent-ink font-mono text-lg font-bold transition-transform group-hover:-translate-y-0.5">d</span>
-      <span class="font-display text-[1.05rem] font-bold tracking-tight">developjik<span class="text-accent">.dev</span></span>
+  <div class="shell flex h-[4.25rem] items-center justify-between gap-6">
+    <a href="/" class="group flex items-baseline gap-2.5" aria-label="홈으로">
+      <span class="font-display text-[1.4rem] font-bold leading-none tracking-tight">
+        developjik<span class="text-accent">.dev</span>
+      </span>
+      <span class="hidden font-mono text-[0.62rem] uppercase tracking-[0.18em] text-faint sm:inline">
+        est. {SITE.since}
+      </span>
     </a>
 
     <nav class="hidden items-center gap-7 md:flex" aria-label="주요 메뉴">

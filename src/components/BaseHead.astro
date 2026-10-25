@@ -42,10 +42,10 @@ const pageTitle = title === SITE.name ? SITE.title : title + ' — ' + SITE.name
 <link rel="icon" type="image/x-icon" sizes="48x48" href="/favicon.ico" />
 <link rel="apple-touch-icon" href="/favicon.ico" />
 
-<!-- theme (no-flash, runs before paint) -->
+<!-- theme (no-flash, runs before paint) — 라이트(종이) 기본 -->
 <script is:inline>
 (function () {
-  var theme = 'dark';
+  var theme = 'light';
   try {
     var qp = new URLSearchParams(window.location.search).get('theme');
     if (qp === 'light' || qp === 'dark') {
@@ -56,15 +56,15 @@ const pageTitle = title === SITE.name ? SITE.title : title + ' — ' + SITE.name
       if (saved === 'light' || saved === 'dark') {
         theme = saved;
       } else {
-        theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       }
     }
   } catch (e) {}
   document.documentElement.dataset.theme = theme;
 })();
 </script>
-<meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)" />
-<meta name="theme-color" content="#fbfcfe" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#16140e" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#f9f7f0" media="(prefers-color-scheme: light)" />
 
 <!-- open graph -->
 <meta property="og:type" content={type} />

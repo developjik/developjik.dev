@@ -17,7 +17,7 @@ export const SERIES: Record<string, SeriesInfo> = {
     short: 'Frontend AI Ops',
     description:
       'AI 코딩 시대에 프론트엔드 개발자가 살아남는 방법은 생성이 아니라 검증과 운영입니다. E2E Eval, 온콜 드릴, 공급망 대응, 변경 실패율(CFR) 관리까지 — 면접과 포트폴리오에 바로 쓰는 24편의 운영 플레이북.',
-    accent: '#4d8dff',
+    accent: '#1f6a4d',
   },
 }
 

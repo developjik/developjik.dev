@@ -25,7 +25,11 @@ export const getStaticPaths = (async () => {
 }) satisfies GetStaticPaths
 
 function template(opts: { kicker: string; title: string; meta: string }) {
-  const gridLines = Array.from({ length: 15 }, (_, i) => i)
+  const paper = '#f9f7f0'
+  const ink = '#1d1912'
+  const accent = '#1f6a4d'
+  const faint = '#918977'
+  const line = '#b9b096'
   return {
     type: 'div',
     props: {
@@ -34,49 +38,71 @@ function template(opts: { kicker: string; title: string; meta: string }) {
         height: '100%',
         display: 'flex',
         position: 'relative',
-        background: '#0e1116',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        padding: '64px 84px',
+        background: paper,
         fontFamily: 'Pretendard',
       },
       children: [
-        ...gridLines.map((i) => ({
-          type: 'div',
-          props: {
-            style: {
-              position: 'absolute',
-              left: i * 86,
-              top: 0,
-              width: 1,
-              height: '100%',
-              background: 'rgba(233,237,244,0.05)',
-            },
-          },
-        })),
         {
           type: 'div',
           props: {
             style: {
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              width: 10,
-              height: '100%',
-              background: 'linear-gradient(180deg, #4d8dff 0%, #7aa9ff 100%)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14,
             },
+            children: [
+              {
+                type: 'div',
+                props: {
+                  style: { width: '100%', height: 3, background: ink },
+                },
+              },
+              {
+                type: 'div',
+                props: {
+                  style: { width: '100%', height: 1, background: ink },
+                },
+              },
+              {
+                type: 'div',
+                props: {
+                  style: {
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontFamily: 'Pretendard',
+                    fontSize: 24,
+                    letterSpacing: 5,
+                    color: accent,
+                    fontWeight: 600,
+                    marginTop: 18,
+                  },
+                  children: [
+                    { type: 'div', props: { children: 'DEVELOPJIK.DEV' } },
+                    { type: 'div', props: { children: opts.kicker } },
+                  ],
+                },
+              },
+            ],
           },
         },
         {
           type: 'div',
           props: {
             style: {
-              position: 'absolute',
-              right: -120,
-              top: -120,
-              width: 480,
-              height: 480,
-              borderRadius: 999,
-              background:
-                'radial-gradient(closest-side, rgba(77,141,255,0.28), rgba(14,17,22,0))',
+              display: 'flex',
+              fontSize: opts.title.length > 40 ? 60 : 72,
+              fontWeight: 700,
+              color: ink,
+              lineHeight: 1.3,
+              letterSpacing: -1.5,
+              maxWidth: 980,
+              textWrap: 'wrap',
             },
+            children: opts.title,
           },
         },
         {
@@ -85,9 +111,7 @@ function template(opts: { kicker: string; title: string; meta: string }) {
             style: {
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'space-between',
-              padding: '72px 84px',
-              width: '100%',
+              gap: 14,
             },
             children: [
               {
@@ -97,43 +121,10 @@ function template(opts: { kicker: string; title: string; meta: string }) {
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    fontFamily: 'Pretendard',
-                    fontSize: 26,
-                    letterSpacing: 4,
-                    color: '#4d8dff',
-                    fontWeight: 600,
-                  },
-                  children: [
-                    { type: 'div', props: { children: 'DEVELOPJIK.DEV' } },
-                    { type: 'div', props: { children: opts.kicker } },
-                  ],
-                },
-              },
-              {
-                type: 'div',
-                props: {
-                  style: {
-                    display: 'flex',
-                    fontSize: opts.title.length > 40 ? 62 : 74,
-                    fontWeight: 700,
-                    color: '#e9edf4',
-                    lineHeight: 1.28,
-                    letterSpacing: -1.5,
-                    maxWidth: 980,
-                    textWrap: 'wrap',
-                  },
-                  children: opts.title,
-                },
-              },
-              {
-                type: 'div',
-                props: {
-                  style: {
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    fontSize: 26,
-                    color: '#8a94a6',
+                    borderTop: `1px solid ${line}`,
+                    paddingTop: 22,
+                    fontSize: 24,
+                    color: faint,
                     fontWeight: 500,
                   },
                   children: [
