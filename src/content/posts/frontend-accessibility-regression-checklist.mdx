@@ -1,0 +1,120 @@
+---
+title: '접근성 회귀를 막는 프론트엔드 PR 체크리스트'
+date: '2026-05-16'
+description: 'AI로 UI 구현 속도가 빨라질수록 놓치기 쉬운 접근성 회귀를 PR 단계에서 잡는 방법을 정리했습니다. 키보드, 포커스, 이름, 상태, 에러 메시지를 실무 체크리스트로 연결합니다.'
+tags: ['프론트엔드', '접근성', 'PR 리뷰', 'AI', '품질', '테스트']
+---
+
+# 접근성 회귀를 막는 프론트엔드 PR 체크리스트
+
+AI로 UI 구현 속도가 빨라질수록 접근성 회귀는 더 쉽게 숨어듭니다. 화면은 빨리 나오지만, 키보드 이동과 스크린리더 이름, 에러 메시지 연결은 자동으로 보장되지 않습니다.
+
+이번 글은 접근성을 "나중에 QA에서 보는 항목"이 아니라 **PR 단계의 회귀 방지 기준**으로 다루는 방법입니다. 시각 회귀 테스트는 [UI 회귀 대응 플레이북](/posts/frontend-ai-ui-regression-playbook), AI 리뷰 기준은 [PR 리뷰 에이전트 가드레일](/posts/frontend-ai-pr-review-agent-guardrails)과 함께 보면 좋습니다.
+
+---
+
+## 접근성 리뷰의 기본 단위
+
+접근성 리뷰를 크게 잡으면 놓치기 쉽습니다. PR에서는 아래 다섯 가지로 쪼개는 편이 실용적입니다.
+
+| 기준 | 확인 질문 |
+| --- | --- |
+| Keyboard | 마우스 없이 주요 행동을 끝낼 수 있는가 |
+| Focus | 현재 위치와 다음 이동 위치가 예측 가능한가 |
+| Name | 버튼, 링크, 입력의 accessible name이 명확한가 |
+| State | 열림/선택/비활성/로딩 상태가 전달되는가 |
+| Error | 실패 메시지가 입력 또는 행동과 연결되는가 |
+
+이 기준은 컴포넌트 단위로 반복 적용할 수 있어야 합니다. "페이지 전체 접근성"보다 "이 combobox의 keyboard contract"처럼 작게 정의해야 리뷰가 빨라집니다.
+
+---
+
+## 체크리스트 1: 키보드로 실제 경로를 탄다
+
+접근성 리뷰에서 가장 먼저 볼 것은 키보드 경로입니다.
+
+- `Tab`으로 주요 interactive element에 도달하는가
+- `Enter`/`Space` 동작이 버튼 의미와 맞는가
+- modal, popover, dropdown에서 포커스가 빠져나가지 않는가
+- 닫은 뒤 포커스가 원래 trigger로 돌아가는가
+
+AI가 만든 UI는 div 클릭 핸들러를 쉽게 만들지만, 키보드 의미는 빠뜨리는 경우가 많습니다. 버튼이면 `button`, 이동이면 `a`를 먼저 쓰는 것이 가장 싸고 강한 해결책입니다.
+
+---
+
+## 체크리스트 2: 이름과 상태가 같이 간다
+
+아이콘 버튼은 특히 위험합니다.
+
+```tsx
+// 위험: 스크린리더가 버튼 목적을 알기 어렵다.
+<button>
+  <SearchIcon />
+</button>
+
+// 개선: 행동 이름을 명확히 제공한다.
+<button aria-label="검색">
+  <SearchIcon aria-hidden="true" />
+</button>
+```
+
+상태가 바뀌는 컨트롤은 이름만으로 부족합니다.
+
+- toggle: `aria-pressed`
+- checkbox/switch: checked state
+- disclosure: `aria-expanded`
+- loading: busy/disabled와 시각 피드백
+- selected tab: 선택 상태와 panel 연결
+
+상태는 CSS class만으로 끝내지 말고, 보조 기술에도 전달되어야 합니다.
+
+---
+
+## 체크리스트 3: 에러 메시지는 입력과 연결한다
+
+폼 에러는 화면에 빨간 글자를 보여주는 것으로 끝나지 않습니다.
+
+- 실패한 input이 에러 메시지를 참조하는가
+- 에러 발생 후 사용자가 어디로 이동해야 하는지 명확한가
+- 서버 에러와 validation 에러를 구분하는가
+- toast만 띄우고 field context를 잃지 않는가
+
+실무에서는 `aria-describedby`와 field-level message를 같이 두면 대부분의 문제를 줄일 수 있습니다.
+
+```tsx
+<input
+  aria-invalid={hasError}
+  aria-describedby={hasError ? 'email-error' : undefined}
+/>
+{hasError ? <p id="email-error">이메일 형식을 확인해주세요.</p> : null}
+```
+
+---
+
+## AI 코드 리뷰에 넣을 프롬프트
+
+AI 에이전트에게 접근성을 맡길 때는 추상 지시보다 계약이 필요합니다.
+
+```md
+아래 UI 변경을 접근성 관점으로 리뷰한다.
+- keyboard-only 경로를 확인한다.
+- icon-only button의 accessible name을 확인한다.
+- modal/dropdown/popover의 focus return을 확인한다.
+- error message와 field 연결을 확인한다.
+- 문제가 있으면 파일/컴포넌트/수정 방향을 함께 적는다.
+```
+
+이 접근은 [AI 산출물 검증 스코어카드](/posts/frontend-ai-delivery-scorecard-playbook)와 결합하면 좋습니다. 접근성은 "좋으면 좋은 것"이 아니라 배포 품질의 일부로 다루어야 합니다.
+
+---
+
+## 면접에서 강한 설명 방식
+
+접근성 경험은 "aria를 썼다"보다 아래처럼 설명해야 설득력이 있습니다.
+
+1. 컴포넌트별 keyboard contract를 정의했다.
+2. PR 체크리스트에 focus/name/state/error를 넣었다.
+3. AI 생성 UI도 같은 기준으로 리뷰했다.
+4. 회귀 가능성이 높은 컴포넌트를 테스트 대상으로 고정했다.
+
+이렇게 말하면 단순 구현자가 아니라 제품 품질을 통제하는 프론트엔드 개발자로 보입니다.
