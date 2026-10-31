@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 const enabled = import.meta.env.PUBLIC_ENABLE_COMMENTS === 'true'
-const repo = import.meta.env.PUBLIC_GISCUS_REPO ?? 'developjik/nextra-blog'
+const repo = import.meta.env.PUBLIC_GISCUS_REPO ?? 'developjik/developjik.dev'
 const repoId = import.meta.env.PUBLIC_GISCUS_REPO_ID
 const categoryId = import.meta.env.PUBLIC_GISCUS_CATEGORY_ID
 

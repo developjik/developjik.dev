@@ -57,7 +57,7 @@ tags: ['태그1', '태그2']
 
 ```bash
 PUBLIC_ENABLE_COMMENTS=true
-PUBLIC_GISCUS_REPO=developjik/nextra-blog
+PUBLIC_GISCUS_REPO=developjik/developjik.dev
 PUBLIC_GISCUS_REPO_ID=R_kgDO...
 PUBLIC_GISCUS_CATEGORY_ID=DIC_kwDO...
 ```

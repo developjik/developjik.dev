@@ -7,7 +7,7 @@ export const SITE = {
   author: 'developjik',
   email: 'developjik@developjik.dev',
   github: 'https://github.com/developjik',
-  repo: 'https://github.com/developjik/nextra-blog',
+  repo: 'https://github.com/developjik/developjik.dev',
   since: 2024,
   locale: 'ko_KR',
 } as const
