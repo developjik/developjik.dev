@@ -13,6 +13,7 @@ tags: ['프론트엔드', 'AI', '에이전트', 'React', 'TypeScript', 'Vite', '
 
 - 코드: [github.com/developjik/damon-chat-desk](https://github.com/developjik/damon-chat-desk)
 - 코어: [github.com/developjik/damon-agent-core](https://github.com/developjik/damon-agent-core)
+- 데모: [developjik.github.io/damon-chat-desk](https://developjik.github.io/damon-chat-desk/) — 설치 없이 demo 모드로 바로 열린다(로컬 데몬에 붙는 경험은 직접 띄워서)
 - 스택: Vite 6 + React 19 + TypeScript(strict), 의존성은 `react`·`react-dom` 둘뿐
 
 ![기본 채팅 — 응답 카드에 라우팅 배지와 툴 레일이 붙는다](https://raw.githubusercontent.com/developjik/damon-chat-desk/main/docs/chat.png)
@@ -366,9 +367,9 @@ npm run build
 # dist/index.html → src="/assets/index-*.js"
 ```
 
-두 base 모두 빌드해서 산출물의 asset 경로를 직접 확인했다. 이걸 틀리면 페이지는 뜨는데 흰 화면이 되고, 원인은 콘솔 404다. `.github/workflows/deploy.yml`로 옮겨 쓰는 워크플로(`docs/deploy.workflow.yml`)의 Build 단계에 `VITE_BASE_PATH`를 넣어 두었다.
+두 base 모두 빌드해서 산출물의 asset 경로를 직접 확인했다. 이걸 틀리면 페이지는 뜨는데 흰 화면이 되고, 원인은 콘솔 404다. Pages 배포 워크플로(`.github/workflows/deploy.yml`)는 Build 단계에서 `VITE_BASE_PATH=/damon-chat-desk/`를 넣고, 산출물의 asset 경로가 `/damon-chat-desk/assets/index-*.js`로 나오는 것까지 확인했다.
 
-> 지금 이 레포의 Pages는 아직 켜지 않았다. 워크플로 파일은 푸시 주체(GitHub App)에 `workflows` 스코프가 없어 `.github/workflows/`로 올릴 수 없었고, 그래서 `docs/`에 복사용으로 두었다. Settings → Pages → Source를 GitHub Actions로 한 번 지정하고 파일을 옮기면 그때부터 `main` 푸시마다 테스트·빌드·배포가 돈다.
+> 이 데모는 [developjik.github.io/damon-chat-desk](https://developjik.github.io/damon-chat-desk/)에 2026-11-18 배포됐다(HTTP 200, 하위 asset까지 200). 켜기까지 걸린 것은 설정 한 번이 아니라 파일 위치였다. 워크플로를 처음부터 `.github/workflows/`에 둘 수 없었던 이유는 푸시 주체(GitHub App)에 `workflows` 스코프가 없었기 때문이고, 그래서 한동안 `docs/deploy.workflow.yml`에 복사용으로 두었다. Settings → Pages → Source를 GitHub Actions로 지정하고 그 파일을 `.github/workflows/deploy.yml`로 옮긴 뒤부터 `main` 푸시마다 테스트·빌드·배포가 돈다.
 
 ## 11. 턴 중단 — 부분 응답을 지우지 않는 법
 
@@ -427,7 +428,7 @@ tsc --noEmit    → 통과 (strict)
 - **Markdown 내보내기는 8,000자에서 자른다.** JSON은 전문을 유지한다. 사람이 읽는 문서에 수백 줄 diff를 그대로 넣는 것은 도움이 아니라 방해다.
 - **데모의 단가·속도는 템플릿이다.** 모델 호출이 아니라 프로바이더 차이를 보여주기 위한 고정값이다. 데모 화면에 `simulated` 배지가 붙어 있는 이유다.
 - **데몬의 CORS는 데몬 쪽 결정이다.** 클라이언트가 프록시로 우회하는 지금 구조가 맞다고 봤다. 데몬이 `/ui`를 직접 서빙하는 설계를 유지하는 한 CORS 헤더를 열 이유가 없다.
-- **Pages 라이브 데모는 아직 안 켰다.** 코드와 워크플로는 준비돼 있고, 켜는 일은 저장소 설정 한 번이다.
+- **라이브 데모는 demo 모드로만 열린다.** https 공개 페이지에서는 loopback 데몬에 붙을 수 없으니(10장), 실제 데몬과 대화하는 경험은 저장소를 받아 로컬에서 확인해야 한다. 그 경계는 의도한 것이고, 그래서 데모 화면에 `simulated` 배지를 붙였다.
 
 ## 마치며
 
