@@ -2,7 +2,15 @@
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { SITE } from '~/consts';
 
-const projects = [
+type Project = {
+  name: string;
+  desc: string;
+  url: string;
+  tag: string;
+  demo?: string;
+};
+
+const projects: Project[] = [
   {
     name: 'confluence-studio',
     desc: 'Confluence를 위한 로컬-first 리서치 워크스페이스 — Tauri + Rust',
@@ -11,21 +19,23 @@ const projects = [
   },
   {
     name: 'damon-agent-core',
-    desc: '멀티 에이전트 오케스트레이션 코어 — 계약 기반 검증과 세션 관리',
+    desc: '코딩 에이전트 9종을 하나의 로컬 데몬으로 제어하는 Rust 에이전트 코어 — 세션·권한 중계·전문 검색 이력',
     url: 'https://github.com/developjik/damon-agent-core',
     tag: 'Agents · Rust',
   },
   {
-    name: 'ai-note',
-    desc: 'AI 어시스턴트와 함께 쓰는 노트 앱 — 로컬 마크다운 + LLM 파이프라인',
-    url: 'https://github.com/developjik/ai-note',
-    tag: 'LLM · Frontend',
+    name: 'damon-chat-desk',
+    desc: '그 데몬 위에 얹은 얇은 채팅 데스크 — 메시지 단위 프로바이더 라우팅과 나란히 비교 모드',
+    url: 'https://github.com/developjik/damon-chat-desk',
+    demo: 'https://developjik.github.io/damon-chat-desk/',
+    tag: 'React · TypeScript',
   },
   {
     name: 'assignment-map',
-    desc: '과제·이슈를 시간축 지도로 시각화하는 프로젝트 트래커',
+    desc: '채용 과제·해커톤·대회·공모전을 매일 수집해, AI로 제출할 수 있는 기회만 남기는 데이터 리포 + 정적 대시보드',
     url: 'https://github.com/developjik/assignment-map',
-    tag: 'Viz · TypeScript',
+    demo: 'https://developjik.github.io/assignment-map/',
+    tag: 'Data · React',
   },
 ];
 
@@ -102,14 +112,28 @@ const principles = [
       <h2 class="mb-8 font-display text-2xl font-bold tracking-tight md:text-[1.7rem]" data-reveal>지금 만들고 있는 것들</h2>
       <div class="grid gap-5 sm:grid-cols-2" data-reveal>
         {projects.map((p) => (
-          <a href={p.url} target="_blank" rel="noopener" class="card card-hover group p-6">
+          <div class="card card-hover group relative p-6">
             <div class="flex items-center justify-between gap-3">
-              <p class="font-mono text-[0.95rem] font-semibold text-ink transition-colors group-hover:text-accent">{p.name}</p>
+              <a
+                href={p.url}
+                target="_blank"
+                rel="noopener"
+                class="font-mono text-[0.95rem] font-semibold text-ink transition-colors after:absolute after:inset-0 after:content-[''] group-hover:text-accent"
+              >
+                {p.name}
+              </a>
               <span class="chip">{p.tag}</span>
             </div>
             <p class="mt-3 text-sm leading-relaxed text-soft">{p.desc}</p>
-            <p class="mt-4 font-mono text-xs text-faint transition-colors group-hover:text-accent">github.com/developjik/{p.name} →</p>
-          </a>
+            <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-faint">
+              <span>github.com/developjik/{p.name}</span>
+              {p.demo && (
+                <a href={p.demo} target="_blank" rel="noopener" class="relative z-10 text-accent hover:underline">
+                  라이브 데모 →
+                </a>
+              )}
+            </div>
+          </div>
         ))}
       </div>
     </div>
