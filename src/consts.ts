@@ -3,7 +3,9 @@ export const SITE = {
   title: 'developjik — 에이전트 시대의 프론트엔드 엔지니어',
   description:
     '프론트엔드 엔지니어 developjik의 기술 블로그. AI 에이전트 시대의 프론트엔드 실무, 운영 플레이북, 웹 플랫폼 engineering 노트.',
-  url: 'https://developjik.dev',
+  // developjik.dev 도메인은 구매하지 않기로 확정 — canonical·og:image·RSS·sitemap 기준 URL은
+  // 실제로 서빙되는 Vercel 프로덕션 URL을 쓴다.
+  url: 'https://developjik-nextra-blog.vercel.app',
   author: 'developjik',
   email: 'developjik@developjik.dev',
   github: 'https://github.com/developjik',

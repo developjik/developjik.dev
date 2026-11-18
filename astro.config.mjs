@@ -7,7 +7,7 @@ import tailwindcss from '@tailwindcss/vite';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://developjik.dev',
+  site: 'https://developjik-nextra-blog.vercel.app',
   trailingSlash: 'never',
   integrations: [mdx(), react(), sitemap(), pagefind()],
   vite: {
