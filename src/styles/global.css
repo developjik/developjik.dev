@@ -60,6 +60,8 @@
   --accent-soft: rgba(31, 106, 77, 0.07);
   --code-bg: #f3efe2;
   --shadow-pop: 0 18px 50px -18px rgba(29, 25, 18, 0.3);
+  /* 본문 단 폭 — 레퍼런스 클러스터(600~656px) 기준 640px */
+  --prose-width: 40rem;
 }
 
 [data-theme="dark"] {
@@ -538,7 +540,7 @@ pre.astro-code {
   border-radius: var(--radius-sm);
   padding: 1.75rem 1.25rem 1.1rem;
   overflow-x: auto;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   line-height: 1.75;
   font-family: var(--font-mono);
   z-index: 0;
@@ -555,6 +557,15 @@ pre.astro-code {
   color: var(--faint);
   padding: 0.45rem 0.9rem;
   pointer-events: none;
+}
+/* 복사 버튼이 있으면 언어 라벨을 왼쪽으로 밀어 겹침 방지 */
+pre.astro-code:has(.copy-btn)::before {
+  right: 4.4rem;
+}
+@media (hover: none) {
+  .copy-btn {
+    opacity: 1;
+  }
 }
 
 .astro-code,

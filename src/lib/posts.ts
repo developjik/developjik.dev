@@ -26,6 +26,11 @@ export function seriesIdOf(slug: string): string | undefined {
   return undefined
 }
 
+/** 글의 시리즈 ID — 프론트매터 series 우선, 미지정 시 slug 접두사 폴백. */
+export function seriesOf(post: Post): string | undefined {
+  return post.data.series ?? seriesIdOf(post.id)
+}
+
 export function formatDate(date: Date): string {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')

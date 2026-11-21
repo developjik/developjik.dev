@@ -1,6 +1,6 @@
 ---
 import type { Post } from '~/lib/posts';
-import { formatDate, seriesIdOf, SERIES } from '~/lib/posts';
+import { formatDate, seriesOf, SERIES } from '~/lib/posts';
 
 interface Props {
   post: Post;
@@ -8,7 +8,8 @@ interface Props {
   featured?: boolean;
 }
 const { post, minutes, featured = false } = Astro.props;
-const series = seriesIdOf(post.id) ? SERIES[seriesIdOf(post.id)!] : undefined;
+const seriesId = seriesOf(post);
+const series = seriesId ? SERIES[seriesId] : undefined;
 ---
 
 <article class:list={['card card-hover group relative flex flex-col p-6', featured && 'md:p-7']} data-reveal>
