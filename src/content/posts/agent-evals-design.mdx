@@ -7,7 +7,7 @@ tags: ['Evals', 'LLM', '에이전트', '테스트', 'LLM-as-judge']
 
 # 에이전트 평가(Evals) 설계 — 통과율이 아니라 실패 모드를 세는 법
 
-"우리 에이전트 통과율 82%입니다"라는 보고를 들으면 제일 먼저 묻고 싶은 게 생깁니다. "남은 18%는 어떻게 실패하나요?" 통과율은 평가의 결과일 뿐 설계가 아닙니다. 에이전트 평가의 실질은 실패를 **모드별로 분류해서 셀 수 있게** 만드는 것이고, 그래야 회귀가 왔을 때 "전체적으로 나빠졌다"가 아니라 "파일 경로 추론 실패가 늘었다"라고 말할 수 있습니다. 이 글은 모델·에이전트 자체의 평가 설계에 한정해 정리했습니다. PR 품질 게이트의 하니스 운영은 [하니스 엔지니어링 글](/posts/frontend-ai-harness-engineering-pr-quality)에서 이미 다뤘습니다.
+"우리 에이전트 통과율 82%입니다"라는 보고를 들으면 제일 먼저 묻고 싶은 게 생깁니다. "남은 18%는 어떻게 실패하나요?" 통과율은 평가의 결과일 뿐 설계가 아닙니다. 에이전트 평가의 실질은 실패를 **모드별로 분류해서 셀 수 있게** 만드는 것이고, 그래야 회귀가 왔을 때 "전체적으로 나빠졌다"가 아니라 "파일 경로 추론 실패가 늘었다"라고 말할 수 있습니다. 이 글은 모델·에이전트 자체의 평가 설계에 한정해 정리했습니다. PR 품질 게이트의 하니스 운영은 [하니스 엔지니어링 글](/posts/frontend-ai-harness-and-contracts)에서 이미 다뤘습니다.
 
 ## 문제 정의
 
@@ -131,4 +131,4 @@ function judge(output: string, c: Case): boolean {
 - [Model-graded metrics — promptfoo](https://www.promptfoo.dev/docs/configuration/expected-outputs/model-graded/) — 모델 채점 어서션 설계 문서
 - [What Changes When You Move to Promptfoo — OpenAI Cookbook](https://developers.openai.com/cookbook/examples/evaluation/moving-from-openai-evals-to-promptfoo) — OpenAI Evals와 promptfoo의 대응 관계
 - [Building effective agents — Anthropic](https://www.anthropic.com/engineering/building-effective-agents) — 단순한 판정부터 시작하라는 에이전트 설계 관점 (2024-12-19)
-- [하니스 엔지니어링과 PR 품질](/posts/frontend-ai-harness-engineering-pr-quality) — 본 블로그의 평가 하니스 운영 글 (2026-03-30)
+- [하니스 엔지니어링과 PR 품질](/posts/frontend-ai-harness-and-contracts) — 본 블로그의 평가 하니스 운영 글 (2026-03-30)

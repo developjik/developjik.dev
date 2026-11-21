@@ -12,6 +12,24 @@
     { "source": "/posts/frontend-ai-ui-regression-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
     { "source": "/posts/frontend-ai-delivery-scorecard-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
     { "source": "/posts/frontend-ai-release-readiness-checklist", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-browser-testing-release-gate-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 }
+    { "source": "/posts/frontend-ai-browser-testing-release-gate-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-prd-to-ticket-system", "destination": "/posts/frontend-ai-harness-and-contracts", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-context-contract-playbook", "destination": "/posts/frontend-ai-harness-and-contracts", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-pr-review-agent-guardrails", "destination": "/posts/frontend-ai-harness-and-contracts", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-harness-engineering-pr-quality", "destination": "/posts/frontend-ai-harness-and-contracts", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-spec-drift-guardrail-playbook", "destination": "/posts/frontend-ai-harness-and-contracts", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-debugging-runbook", "destination": "/posts/frontend-ai-oncall-runbooks", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-post-deploy-observability-runbook", "destination": "/posts/frontend-ai-oncall-runbooks", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-oncall-drill-playbook", "destination": "/posts/frontend-ai-oncall-runbooks", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-supply-chain-incident-playbook", "destination": "/posts/frontend-ai-oncall-runbooks", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-mcp-incident-triage-playbook", "destination": "/posts/frontend-ai-oncall-runbooks", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-migration-rehearsal-playbook", "destination": "/posts/frontend-ai-safe-changes", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-change-failure-rate-playbook", "destination": "/posts/frontend-ai-safe-changes", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-design-system-safe-rollout-playbook", "destination": "/posts/frontend-ai-safe-changes", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-interview-proof-logbook", "destination": "/posts/frontend-ai-proof-of-work", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-interview-ready-pr-playbook", "destination": "/posts/frontend-ai-proof-of-work", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-hiring-task-runbook", "destination": "/posts/frontend-ai-proof-of-work", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-portfolio-impact-metrics-playbook", "destination": "/posts/frontend-ai-proof-of-work", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-impact-portfolio-playbook", "destination": "/posts/frontend-ai-proof-of-work", "statusCode": 301 }
   ]
 }

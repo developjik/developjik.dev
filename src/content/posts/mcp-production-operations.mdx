@@ -7,7 +7,7 @@ tags: ['MCP', '보안', 'OAuth', '에이전트', '운영']
 
 # MCP 운영 가이드 — 기초 다음 단계: 인증, 보안, 게이트웨이
 
-로컬에서 stdio로 도는 MCP 서버 하나로 시작하면 "이거 되네"까진 빠릅니다. 문제는 그 다음입니다. 팀 전체가 쓰게 만드는 순간 누가 어떤 서버에 접속하는지(인증), 서버가 믿을 만한지(보안), 무엇이 바뀌었는지(운영)라는 세 질문에 답해야 합니다. [MCP 기초 정리](/posts/model-context-protocol-guide)와 [장애 대응 플레이북](/posts/frontend-ai-mcp-incident-triage-playbook)은 읽었다고 가정하고, 이 글은 그다음 단계인 "운영·보안"만 다룹니다.
+로컬에서 stdio로 도는 MCP 서버 하나로 시작하면 "이거 되네"까진 빠릅니다. 문제는 그 다음입니다. 팀 전체가 쓰게 만드는 순간 누가 어떤 서버에 접속하는지(인증), 서버가 믿을 만한지(보안), 무엇이 바뀌었는지(운영)라는 세 질문에 답해야 합니다. [MCP 기초 정리](/posts/model-context-protocol-guide)와 [장애 대응 플레이북](/posts/frontend-ai-oncall-runbooks)은 읽었다고 가정하고, 이 글은 그다음 단계인 "운영·보안"만 다룹니다.
 
 ## 문제 정의
 
@@ -72,7 +72,7 @@ MCP 보안 논의는 가설로 시작하지 않았습니다. 2025년 봄, 실제
 - **감사 로그**: 누가/어떤 에이전트가/어떤 툴을/어떤 인자로 호출했는지 구조화해 남긴다. 인자에 문서 본문 통째로를 남기지 말고 크기 상한과 해시로 요약한다.
 - **툴 버저닝**: 서버 쪽에서 툴 이름이나 스키마를 바꿀 때는 게이트웨이에서 이전 버전을 병행 제공하고 클라이언트 마이그레이션 기간을 둔다. 파괴적 변경은 스모크 테스트(툴 목록·스키마 dump)로 감지한다.
 
-감사 로그는 장애 대응 때도 쓰입니다만, 그 절차는 [MCP 사고 대응 플레이북](/posts/frontend-ai-mcp-incident-triage-playbook)에 이미 정리했으니 여기서는 생략합니다. 공급망(서버 패키지 자체의 신뢰) 관점은 [공급망 사고 플레이북](/posts/frontend-ai-supply-chain-incident-playbook)과 같은 프레임으로 볼 수 있습니다.
+감사 로그는 장애 대응 때도 쓰입니다만, 그 절차는 [온콜 런북](/posts/frontend-ai-oncall-runbooks)에 이미 정리했으니 여기서는 생략합니다. 공급망(서버 패키지 자체의 신뢰) 관점도 [온콜 런북](/posts/frontend-ai-oncall-runbooks)의 공급망 사고 프레임과 같은 맥락으로 볼 수 있습니다.
 
 ## 원인으로 돌아가는 체크리스트
 
@@ -99,5 +99,5 @@ MCP의 가치는 "무엇이든 연결할 수 있다"가 아니라 "연결을 통
 - [MCP Security Notification: Tool Poisoning Attacks — Invariant Labs](https://invariantlabs.ai/blog/mcp-security-notification-tool-poisoning-attacks) — 툴 poisoning·rug pull 공격 시연 보고 (2025-04-01)
 - [Protecting against indirect prompt injection attacks in MCP — Microsoft](https://developer.microsoft.com/blog/protecting-against-indirect-injection-attacks-mcp) — 간접 인젝션 대응 가이드
 - [MCP 기초 가이드](/posts/model-context-protocol-guide) — 본 블로그의 MCP 개요 글 (2026-01-22)
-- [MCP 사고 대응 플레이북](/posts/frontend-ai-mcp-incident-triage-playbook) — MCP 연계 장애 대응 절차 (2026-04-06)
-- [공급망 사고 플레이북](/posts/frontend-ai-supply-chain-incident-playbook) — 패키지 신뢰성 사고 대응 (2026-04-04)
+- [MCP 사고 대응 플레이북](/posts/frontend-ai-oncall-runbooks) — MCP 연계 장애 대응 절차 (2026-04-06)
+- [공급망 사고 플레이북](/posts/frontend-ai-oncall-runbooks) — 패키지 신뢰성 사고 대응 (2026-04-04)

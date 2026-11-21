@@ -7,7 +7,7 @@ tags: ['디자인 시스템', '디자인 토큰', '코딩 에이전트', 'Stylel
 
 # 코딩 에이전트가 디자인 시스템을 지키게 만들기 — 프롬프트가 아니라 게이트로
 
-에이전트에게 "디자인 시스템 지켜서 만들어"라고 부탁한 경험은 대부분 비슷합니다. 첫 컴포넌트는 그럴듯하고, 세 번째 컴포넌트부터 `color: #3b82f6`와 `margin: 13px`가 섞여 나옵니다. 사람 신입도 겪는 문제지만 에이전트는 더 심합니다. 사람은 디자이너의 눈을 기억하지만, 에이전트는 컨텍스트에 없는 규칙은 존재하지 않는 규칙이기 때문입니다. 이 글은 디자인 시스템의 안전한 롤아웃 자체가 아니라([그건 별도 플레이북](/posts/frontend-ai-design-system-safe-rollout-playbook)으로 정리했습니다), **에이전트가 규칙을 지키게 만드는 장치**에 집중합니다.
+에이전트에게 "디자인 시스템 지켜서 만들어"라고 부탁한 경험은 대부분 비슷합니다. 첫 컴포넌트는 그럴듯하고, 세 번째 컴포넌트부터 `color: #3b82f6`와 `margin: 13px`가 섞여 나옵니다. 사람 신입도 겪는 문제지만 에이전트는 더 심합니다. 사람은 디자이너의 눈을 기억하지만, 에이전트는 컨텍스트에 없는 규칙은 존재하지 않는 규칙이기 때문입니다. 이 글은 디자인 시스템의 안전한 롤아웃 자체가 아니라([그건 별도 플레이북](/posts/frontend-ai-safe-changes)으로 정리했습니다), **에이전트가 규칙을 지키게 만드는 장치**에 집중합니다.
 
 ## 문제 정의
 
@@ -107,7 +107,7 @@ tags: ['디자인 시스템', '디자인 토큰', '코딩 에이전트', 'Stylel
 3차 시각 게이트       스토리 스냅샷 diff + 사람 승인 → 의미 위반 검수
 ```
 
-프롬프트(부탁)는 어디에도 없습니다. 부탁은 모델이 바뀌거나 컨텍스트가 흐려지면 소멸하지만, 게이트는 소멸하지 않기 때문입니다. 이건 PR 리뷰 에이전트를 통제했던 [PR 리뷰 가드레일 글](/posts/frontend-ai-pr-review-agent-guardrails)과 같은 설계 철학입니다 — 에이전트를 믿는 대신 검증 가능한 지점을 늘리는 것.
+프롬프트(부탁)는 어디에도 없습니다. 부탁은 모델이 바뀌거나 컨텍스트가 흐려지면 소멸하지만, 게이트는 소멸하지 않기 때문입니다. 이건 PR 리뷰 에이전트를 통제했던 [계약과 하네스 글](/posts/frontend-ai-harness-and-contracts)의 가드레일과 같은 설계 철학입니다 — 에이전트를 믿는 대신 검증 가능한 지점을 늘리는 것.
 
 ## 체크리스트
 
@@ -132,5 +132,5 @@ tags: ['디자인 시스템', '디자인 토큰', '코딩 에이전트', 'Stylel
 - [declaration-property-value-disallowed-list — Stylelint](https://stylelint.io/user-guide/rules/declaration-property-value-disallowed-list) — 속성값 차단 규칙 문서
 - [Visual tests — Storybook docs](https://storybook.js.org/docs/writing-tests/visual-testing) — 스토리 스냅샷 기반 시각 테스트 공식 문서
 - [Visual tests — Chromatic docs](https://docs.chromatic.com/docs/visual) — PR 단위 UI 검수 도구 문서
-- [디자인 시스템 안전 롤아웃 플레이북](/posts/frontend-ai-design-system-safe-rollout-playbook) — 본 블로그의 디자인 시스템 출시 관리 글 (2026-04-10)
-- [PR 리뷰 에이전트 가드레일](/posts/frontend-ai-pr-review-agent-guardrails) — 검증 지점을 늘리는 설계 철학 글 (2026-03-27)
+- [디자인 시스템 안전 롤아웃 플레이북](/posts/frontend-ai-safe-changes) — 본 블로그의 디자인 시스템 출시 관리 글 (2026-04-10)
+- [PR 리뷰 에이전트 가드레일](/posts/frontend-ai-harness-and-contracts) — 검증 지점을 늘리는 설계 철학 글 (2026-03-27)
