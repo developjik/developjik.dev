@@ -1,0 +1,85 @@
+---
+title: '프론트엔드 개발자를 위한 OAuth 2.0 흐름 이해'
+date: '2025-09-02'
+description: '인가코드 플로우와 PKCE의 동작을 프론트엔드 관점으로 정리하고, 토큰 저장 위치 논쟁을 짚어봅니다.'
+tags: ['Security', 'Auth']
+---
+
+# 프론트엔드 개발자를 위한 OAuth 2.0 흐름 이해
+
+## 개요
+
+"소셜 로그인 붙여주세요"라고 했을 때 마주하는 것이 OAuth 2.0입니다. 설정만 따라 하면 동작은 하지만, 흐름을 이해해야 토큰 저장 위치나 보안 이슈를 판단할 수 있습니다. 프론트엔드 개발자 시점에서 필요한 만큼만 정리했습니다.
+
+## 인가코드 플로우
+
+가장 흔한 것이 인가코드 플로우(Authorization Code Flow)입니다. 핵심은 "사용자를 인가 서버로 보내고, 코드를 받아 토큰으로 교환한다"입니다.
+
+1. 앱이 인가 서버의 `/authorize`로 리다이렉트합니다. 이때 `response_type=code`, `client_id`, `redirect_uri`, `scope`, `state`를 실어 보냅니다.
+2. 사용자가 인가 서버에서 로그인/동의를 마치면, 인가 서버는 `redirect_uri`로 인가코드를 실어 되돌려보냅니다.
+3. 앱(또는 백엔드)은 코드를 토큰 엔드포인트(`/token`)에서 access token으로 교환합니다.
+
+```text
+브라우저 ──① authorize 요청──▶ 인가 서버
+브라우저 ◀──② redirect: ?code=...&state=...── 인가 서버
+백엔드 ──③ code + client_secret ─▶ /token
+백엔드 ◀──── access_token ──── /token
+```
+
+`state`는 CSRF 방지용 임의 값입니다. 요청 시 만들어 세션에 저장해두고, 리다이렉트로 돌아온 값과 비교하지 않으면 인가 코드가 위조된 것인지 알 수 없습니다.
+
+## PKCE: 프론트엔드가 직접 다룰 때는 필수
+
+SPA처럼 백엔드 없이 브라우저에서 토큰 교환을 해야 하면 `client_secret`을 숨길 방법이 없습니다. 그래서 나온 것이 PKCE(Proof Key for Code Exchange, "픽시"라고 읽습니다)입니다.
+
+```ts
+// 1. 코드 베리파이어를 만들고 해시한 값(챌린지)을 authorize 요청에 실어 보낸다
+const verifier = base64UrlEncode(crypto.getRandomValues(new Uint8Array(32)));
+const challenge = base64UrlEncode(
+  await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+);
+
+const authorizeUrl =
+  `https://auth.example.com/authorize` +
+  `?response_type=code&client_id=${CLIENT_ID}` +
+  `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+  `&code_challenge=${challenge}&code_challenge_method=S256` +
+  `&state=${state}`;
+
+// 2. 토큰 교환 시 원본 verifier를 함께 보낸다
+const res = await fetch('https://auth.example.com/token', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  body: new URLSearchParams({
+    grant_type: 'authorization_code',
+    code,
+    code_verifier: verifier,
+    client_id: CLIENT_ID,
+    redirect_uri: REDIRECT_URI,
+  }),
+});
+```
+
+인가 서버는 챌린지와 베리파이어가 대응되는지 확인합니다. 중간에 코드를 가로채도 베리파이어 없으면 교환할 수 없으므로, 시크릿 없는 공개 클라이언트의 표준 안전장치가 됐습니다. 현재 OAuth 2.1 초안에서는 모든 클라이언트에 PKCE를 권장하고 있습니다.
+
+## 토큰 저장 위치 논쟁
+
+access token을 어디에 둘지는 오래된 논쟁입니다. 결론부터 말하면 정답은 없고 트레이드오프가 있습니다.
+
+| 저장소 | XSS | CSRF | 특징 |
+| --- | --- | --- | --- |
+| 메모리 | 안전함 | 해당 없음 | 새로고침 시 사라져 재발급 흐름 필수 |
+| localStorage | 위험 (JS로 접근 가능) | 안전함 | XSS에 당하면 토큰이 통째로 유출 |
+| HttpOnly 쿠키 | 안전함 (JS 접근 불가) | 위험 | CSRF 방어(SameSite 등) 필수 |
+
+제 선택은 "refresh token은 HttpOnly 쿠키, access token은 메모리"였습니다. refresh token을 백엔드가 쿠키로 발급하고, access token은 짧은 수명으로 메모리에만 유지하는 방식입니다. 어느 쪽이든 XSS 방어(입력 값 살균, CSP)와 CSRF 방어를 병행해야 한다는 점은 변하지 않습니다.
+
+## 프론트엔드에서 자주 하는 실수
+
+- 토큰을 URL이나 로그에 남기기 — 리다이렉트 URL은 로그에 쉽게 남습니다.
+- `state` 검증 생략 — 로그인 CSRF의 문이 열립니다.
+- 암시적 플로우(`response_type=token`) 사용 — 토큰이 URL 프래그먼트로 노출되어 권장되지 않습니다.
+
+## 마무리
+
+OAuth 2.0은 "인가" 프로토콜이지 인증 그 자체가 아니며, 목적에 따라 OIDC(OpenID Connect)를 얹어 쓴다는 점도 기억하면 좋습니다. 프론트엔드 개발자라면 최소한 인가코드 플로우와 PKCE의 동작, 그리고 토큰 저장 트레이드오프는 설명할 수 있어야 한다고 생각합니다.

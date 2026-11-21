@@ -1,0 +1,109 @@
+---
+title: '상태관리 재정리: Redux에서 Zustand로'
+date: '2025-06-03'
+description: 'Redux가 준 원칙과 그 원칙이 남긴 보일러플레이트를 돌아보고, Zustand로 마이그레이션한 기준과 전략을 정리했습니다.'
+tags: ['React', 'State']
+---
+
+# 상태관리 재정리: Redux에서 Zustand로
+
+## 개요
+
+Redux를 몇 년간 쓰다가 Zustand로 옮긴 경험을 정리합니다. 단순히 "가볍다"는 이유가 아니라, Redux가 강제하던 구조가 주는 비용과 이득을 다시 계산한 결과였습니다. 어떤 걸 버렸고 어떤 걸 가져갔는지 적어둡니다.
+
+## Redux의 원칙이 준 것
+
+Redux가 가르쳐준 것은 세 가지 원칙이었습니다. 상태는 하나의 스토어에, 상태는 읽기 전용이며 액션으로만 변경, 변경은 순수 리듀서로. 이 원칙들은 실제로 강력했습니다.
+
+- 모든 변경이 액션을 거치므로 "누가 이 값을 바꿨나"를 추적할 수 있었습니다
+- 리듀서가 순수 함수라서 상태 변경 로직을 테스트하기 쉬웠습니다
+- 단일 스토어 덕분에 전체 상태를 한 곳에서 들여다볼 수 있었습니다
+
+특히 상태 변경을 액션의 흐름으로 보는 관점은 Redux를 떠나서도 유효한 사고방식이라고 생각합니다. 다만 시간이 지나며 현실은 어려워졌습니다. 비동기 처리를 위해 redux-thunk나 redux-saga를 붙이고, 액션 타입·액션 생성자·리듀서를 오가는 파일 수가 늘고, 값 하나 바꾸는 데 손대는 파일이 3~4개가 되는 상황이었습니다.
+
+## 보일러플레이트의 실체
+
+Redux Toolkit이 이 지점을 크게 개선해 줬다는 건 인정합니다. createSlice 하나로 액션과 리듀서를 같이 정의할 수 있으니 예전보다 나아졌죠. 그래도 여전히 남는 비용이 있었습니다. 스토어 설계, slice 분할 기준, Provider와 연결(selector, useDispatch), 그리고 작은 상태 하나에도 거쳐야 하는 추상화 레이어. 팀원이 "그냥 이 버튼 눌렀을 때 이 배열에 항목 추가하고 싶은데"라고 말할 때 그 간단함을 코드로 옮기기까지의 거리가 멀었습니다.
+
+## Zustand의 접근
+
+Zustand는 이 거리를 없애는 방향을 택했습니다. 스토어는 그냥 훅이고, 상태 변경은 그 훅이 돌려주는 setter입니다.
+
+```typescript
+import { create } from 'zustand';
+
+type CartItem = { id: string; name: string; price: number };
+
+type CartState = {
+  items: CartItem[];
+  addItem: (item: CartItem) => void;
+  removeItem: (id: string) => void;
+  clear: () => void;
+};
+
+export const useCartStore = create<CartState>((set) => ({
+  items: [],
+  addItem: (item) =>
+    set((state) => ({ items: [...state.items, item] })),
+  removeItem: (id) =>
+    set((state) => ({ items: state.items.filter((i) => i.id !== id) })),
+  clear: () => set({ items: [] }),
+}));
+```
+
+컴포넌트에서는 Provider 없이 바로 씁니다.
+
+```tsx
+function CartSummary() {
+  const items = useCartStore((s) => s.items);
+  const total = items.reduce((sum, i) => sum + i.price, 0);
+
+  return <p>총 {items.length}개 · {total.toLocaleString('ko-KR')}원</p>;
+}
+
+function AddToCartButton({ item }: { item: CartItem }) {
+  const addItem = useCartStore((s) => s.addItem);
+  return <button onClick={() => addItem(item)}>장바구니 담기</button>;
+}
+```
+
+핵심은 셀렉터입니다. `useCartStore((s) => s.items)`처럼 필요한 조각만 구독하면 그 조각이 바뀔 때만 리렌더됩니다. 셀렉터 없이 `useCartStore()`로 통째로 구독하는 습관이 리렌더 문제의 주범이라는 점은 꼭 팀에 공유해 두는 게 좋습니다.
+
+## Redux가 준 원칙은 버리지 않기
+
+Zustand로 옮기면서 지키려는 규칙을 만들었습니다. 상태 변경은 스토어의 액션 함수 안에서만 (컴포넌트에서 set을 직접 부르지 않기), 액션 함수는 최대한 단순하게, 로컬 UI 상태는 스토어에 넣지 않기. 이름에서 'Action'이 사라졌을 뿐 사고방식은 Redux에서 배운 그대로입니다. 실제로 Zustand에도 미들웨어가 있어서 로깅이나 영속화(persist)는 얼마든지 붙일 수 있습니다.
+
+```typescript
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+export const useSettingsStore = create<{
+  theme: 'light' | 'dark';
+  setTheme: (theme: 'light' | 'dark') => void;
+}>()(
+  persist(
+    (set) => ({
+      theme: 'light',
+      setTheme: (theme) => set({ theme }),
+    }),
+    { name: 'app-settings' },
+  ),
+);
+```
+
+`persist` 미들웨어만으로 localStorage 동기화가 끝납니다.
+
+## 마이그레이션 전략
+
+한 번에 다 바꾸지 않았습니다. 기준과 순서는 이렇게 잡았습니다.
+
+1. 새로 만드는 기능은 Zustand로 시작 (리스크가 낮은 곳에서 경험 축적)
+2. 변경이 잦아 셀렉터 비용이 큰 순서대로 기존 slice 이전
+3. Redux와 Zustand가 공존하는 기간을 허용하고, Provider/데브툴스는 끝까지 유지
+4. 마지막에 남은 slice를 옮기고 redux 의존성 제거
+
+두 스토어가 공존하는 동안 같은 데이터를 양쪽에 두지 않도록 "이 데이터의 주인"을 문서로 명시한 것도 실수를 줄여줬습니다. 서버에서 오는 데이터는 애초에 TanStack Query 캐시가 주인이므로 전역 상태 자체가 눈에 띄게 줄었고, 그것이 마이그레이션의 실질적 이득이었습니다.
+
+## 마무리
+
+Redux는 상태 관리의 원칙을 가르쳐 준 좋은 스승이었고, Zustand는 그 원칙을 훨씬 얇은 추상화로 실천하게 해줬습니다. 도구를 바꾸는 것보다 중요한 건 "무엇이 전역 상태여야 하는가"라는 질문에 대한 답을 계속 다듬는 것입니다. 그 답이 명확한 팀이라면 어떤 라이브러리를 쓰든 유지보수는 어렵지 않습니다.

@@ -1,0 +1,97 @@
+---
+title: '프론트엔드를 위한 HTTP 캐싱 완벽 이해'
+date: '2024-12-03'
+description: 'Cache-Control, ETag, Last-Modified, Vary의 동작 방식과 해시 기반 정적 자산 캐싱 전략을 개발자 도구 확인 방법과 함께 정리합니다.'
+tags: ['HTTP', 'Network', 'Performance']
+---
+
+# 프론트엔드를 위한 HTTP 캐싱 완벽 이해
+
+## 개요
+
+Lighthouse를 돌려보면 늘 나오는 제안이 "정적 자산에 캐시 정책을 적용하세요"입니다. 캐싱은 프론트엔드 성능에서 가장 저렴하면서 효과 큰 최적화지만, `Cache-Control` 헤더 하나 이해하는 데 생각보다 많은 개념이 얽혀 있습니다. 실무에서 적용하며 정리한 내용을 공유합니다.
+
+## 캐시는 어디에 있나
+
+브라우저의 HTTP 요청은 최대한 로컬 캐시에서 해결하려 하고, 없으면 중간의 CDN이나 프록시 캐시를 거쳐 마지막으로 원본 서버에 도달합니다. 어느 캐시를 얼마나 오래 믿을지 정하는 것이 바로 응답 헤더의 역할입니다.
+
+## Cache-Control: 캐시의 수명과 범위
+
+`Cache-Control`은 캐시 동작을 지시하는 대표 헤더입니다. 자주 쓰는 디렉티브만 정리해도 이렇습니다.
+
+```http
+Cache-Control: no-cache
+Cache-Control: no-store
+Cache-Control: public, max-age=31536000
+Cache-Control: public, max-age=31536000, immutable
+Cache-Control: private, max-age=0, must-revalidate
+```
+
+- `no-store`: 아무 캐시에 저장하지 않음. 요청마다 원본으로.
+- `no-cache`: 저장은 하되, 사용 전에는 반드시 서버에 재검증해야 함.
+- `max-age=N`: N초 동안 신선한(fresh) 상태로 취급.
+- `private`: 브라우저만 캐시 (CDN·공유 프록시는 저장 금지). 사용자별 응답에 사용.
+- `immutable`: 신선한 상태에서는 재검증조차 하지 않음 (아래에서 다시).
+
+## ETag와 Last-Modified: 재검증의 두 방식
+
+`max-age`가 만료되면 브라우저는 서버에 "이 데이터 아직 유효한가?"라고 물어봅니다. 이것이 **재검증(validation)**이고, 조건부 요청으로 수행됩니다.
+
+- `Last-Modified` + `If-Modified-Since`: 시간 기반. "이 시간 이후로 바뀌었나?"
+- `ETag` + `If-None-Match`: 콘텐츠 식별자 기반. "이 ETag와 같은 버전인가?"
+
+```http
+# 첫 응답
+HTTP/1.1 200 OK
+ETag: "abc123"
+Cache-Control: no-cache
+
+# 재검증 요청
+GET /data.json
+If-None-Match: "abc123"
+
+# 변경 없음 → 본문 없이 304
+HTTP/1.1 304 Not Modified
+```
+
+304 응답은 본문이 없으므로 트래픽이 거의 없지만 요청 자체는 발생합니다. 그래서 "자주 안 바뀌면 긴 max-age, 바뀔 수 있으면 재검증"으로 설계합니다.
+
+## 해시 자산과 immutable
+
+번들러는 파일 내용의 해시를 파일명에 넣습니다(`app.a3f9c2.js`). 내용이 바뀌면 해시가 바뀌어 새 URL이 되므로, **해시가 있는 자산은 사실상 영원히 캐시해도 안전**합니다.
+
+```http
+# 해시 있는 정적 자산
+Cache-Control: public, max-age=31536000, immutable
+
+# index.html (해시 없는 진입점)
+Cache-Control: no-cache
+```
+
+`immutable`의 효과는 의외의 곳에서 나타납니다. 탭을 다시 활성화하면 브라우저는 신선한 리소스라도 재검증하는 경우가 있는데, `immutable`이 있으면 이 재검증마저 건너뜁니다. HTML은 `no-cache`로 항상 재검증하게 두고, HTML이 참조하는 해시 자산은 1년 캐시. 이 조합이 프론트엔드 캐싱의 정석입니다.
+
+## Vary: 캐시를 나누는 기준
+
+같은 URL이라도 요청에 따라 다른 응답을 내려주는 경우, 캐시가 구분 기준을 알아야 합니다. `Vary` 헤더가 그 역할을 합니다.
+
+```http
+Content-Encoding: br
+Vary: Accept-Encoding
+```
+
+`Accept-Encoding`으로 `Vary`를 지정하면 브라우저 캐시와 CDN이 gzip/br 압축 버전을 별도로 저장합니다. 서버가 `User-Agent`별로 다른 마크업을 내려준다면 `Vary: User-Agent`이 필요하겠지만, 이 경우 캐시 히트율이 크게 떨어지므로 압축 외에는 되도록 Vary를 늘리지 않는 것이 좋습니다.
+
+## 개발자 도구로 확인하기
+
+크롬 개발자 도구 Network 패트에서 확인하는 방법입니다.
+
+1. **Size 컬럼**: "123 KB"가 아니라 `(disk cache)` 또는 `(memory cache)`로 표시되면 캐시 히트입니다.
+2. **Status 컬럼**: `200`과 `304`가 구분돼 보이고, `200 (from disk cache)` 형태로 표시되기도 합니다.
+3. **Disable cache 체크박스**: 켜면 검증 중 캐시를 무시합니다 (DevTools 열려 있을 때만).
+4. **Headers 탭**: 응답의 `Cache-Control`, `ETag`, `Age` 값을 직접 확인할 수 있습니다.
+
+제일 쉬운 실험은 해시된 JS 파일을 두 번 리로드해보는 것입니다. 두 번째 요청이 `(disk cache)`로 표시된다면 정책이 제대로 적용된 겁니다.
+
+## 마무리
+
+핵심을 세 줄로 압축하면: HTML은 `no-cache`, 해시 자산은 `max-age=31536000, immutable`, 사용자별 API 응답은 `private` + 재검증. 캐싱은 서버/CDN 설정이 반인 프론트엔드 영역이라 소홀히 하기 쉬운데, 헤더 몇 개로 왕복 요청 자체를 없앨 수 있는 가장 강력한 최적화라는 점을 기억하시길 바랍니다.

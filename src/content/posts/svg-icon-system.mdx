@@ -1,0 +1,116 @@
+---
+title: 'SVG 최적화: 아이콘 시스템 만들기'
+date: '2025-10-21'
+description: '아이콘마다 색을 따로 지정하던 습관을 버리고 currentColor 기반 SVG 아이콘 시스템로 갈아탄 경험을 정리했습니다. 스프라이트와 컴포넌트 방식의 트레이드오프도 담았습니다.'
+tags: ['SVG', 'Performance']
+---
+
+# SVG 최적화: 아이콘 시스템 만들기
+
+## 개요
+
+프로젝트마다 아이콘 처리 방식이 조금씩 달랐습니다. 이미지로 넣었다가 색이 안 바뀌어서 복제본을 만들고, 복제본이 열몇 개가 되는 악순환이 반복됐습니다. 이 글에서는 currentColor를 활용한 SVG 아이콘 시스템을 만들면서 정리한 내용 — 색상 상속, 스프라이트와 컴포넌트 방식 비교, 트리셰이킹까지 — 을 공유합니다.
+
+## 왜 SVG인가, 그리고 currentColor
+
+SVG는 텍스트 기반 벡터 포맷이라 CSS로 스타일을 제어할 수 있습니다. 특히 `currentColor`는 CSS의 상속된 글자색을 채움색으로 쓰겠다는 키워드라서, 아이콘 색을 일일이 지정하지 않아도 됩니다.
+
+```html
+<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+  <path
+    d="M12 2 2 7v10l10 5 10-5V7L12 2zm0 2.2 7.5 3.8L12 11.8 4.5 8 12 4.2z"
+    fill="currentColor"
+  />
+</svg>
+```
+
+이렇게 두면 아이콘을 감싼 요소의 `color`만 바꾸면 아이콘도 따라 바뀝니다.
+
+```css
+.button { color: #1f2937; }
+.button:hover { color: #2563eb; } /* 아이콘도 함께 파란색으로 */
+```
+
+디자이너가 넘겨준 SVG에 `fill="#333"` 같은 하드코딩된 색이 박혀 있으면 이 구조가 깨집니다. 그래서 아이콘을 받을 때마다 fill 값을 `currentColor`로 치환하는 것을 시스템의 첫 번째 규칙으로 삼았습니다. stroke 기반 아이콘이라면 `stroke="currentColor"`로 같은 원리를 적용합니다.
+
+## 스프라이트 방식
+
+여러 아이콘을 한 파일에 모아두고 `<use>`로 참조하는 방식입니다.
+
+```html
+<!-- 문서 상단(보통 body 직후)에 심어두는 스프라이트 -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="icon-home" viewBox="0 0 24 24">
+    <path d="M12 3 3 11h2v9h6v-6h2v6h6v-9h2L12 3z" fill="currentColor"/>
+  </symbol>
+</svg>
+
+<!-- 사용처 -->
+<svg width="24" height="24" aria-hidden="true">
+  <use href="#icon-home" />
+</svg>
+```
+
+장점은 HTTP 요청이 한 번으로 묶이고(인라인이면 0회), 마크업이 짧아지며, 프레임워크와 무관하게 쓸 수 있다는 것입니다. 단점도 분명했습니다.
+
+- 스프라이트 파일이 초기 HTML에 인라인되면 쓰지 않는 아이콘 바이트까지 먼저 내려갑니다.
+- 어떤 아이콘이 있는지 파일을 열어보기 전엔 알기 어려워 관리가 사람 의존적이 됩니다.
+- 빌드 파이프라인(수동 갱신이 아니라면)을 따로 만들어야 합니다.
+
+외부 파일(`icon.svg#icon-home`)로 빼면 캐시는 좋아지지만 same-origin 이슈가 생길 수 있고, `use`로 참조한 내부 요소의 개별 스타일링이 어렵다는 제약도 있습니다.
+
+## 컴포넌트 방식과 tree-shaking
+
+지금은 React 프로젝트에서 컴포넌트 방식을 주로 씁니다. 아이콘마다 컴포넌트를 만들고 필요한 것만 import하는 구조입니다.
+
+```tsx
+// components/icons/HomeIcon.tsx
+import type { SVGProps } from 'react';
+
+export function HomeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="1em"
+      height="1em"
+      fill="currentColor"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M12 3 3 11h2v9h6v-6h2v6h6v-9h2L12 3z" />
+    </svg>
+  );
+}
+```
+
+이 방식의 결정적 장점은 tree-shaking입니다. `import { HomeIcon } from '@/icons'`처럼 배럴 파일에서 가져와도, 번들러는 실제로 사용한 컴포넌트만 최종 번들에 남깁니다. 아이콘이 300개여도 쓰는 30개만 들어가는 셈입니다.
+
+```tsx
+import { HomeIcon, SearchIcon } from '@/icons';
+
+<nav>
+  <button><HomeIcon /> 홈</button>
+  <button><SearchIcon /> 검색</button>
+</nav>
+```
+
+크기를 `1em`으로 지정하면 폰트 크기에 아이콘이 따라가서, 텍스트 옆 아이콘 정렬이 훨씬 편해졌습니다. 여기에 `aria-hidden="true"`를 기본값으로 두고, 의미가 있는 아이콘은 `role="img"`와 `aria-label`을 props로 넘기게 하는 식으로 접근성 규칙도 시스템에 녹였습니다.
+
+## SVGO로 파이프라인 정리
+
+디자이너가 주는 SVG에는 편집기 메타데이터, 불필요한 소수점, 주석이 남아 있습니다. SVGO로 이런 것들을 걷어내면 용량이 눈에 띄게 줄었습니다. CLI로 한 번 정리할 수도 있고 빌드에 붙일 수도 있습니다.
+
+```bash
+npx svgo --folder=src/assets/icons --output=src/components/icons
+```
+
+주의할 설정도 있었습니다. `removeViewBox` 같은 기본 활성화 플러그인이 viewBox를 지워버리면 크기 조절이 깨지므로 끄고, `convertColors`는 `currentColor`를 건드리지 않도록 확인이 필요합니다. 저는 `removeViewBox: false`를 명시적으로 넣어둡니다.
+
+## 마무리
+
+정리하면 저희 팀의 기준은 이렇습니다. React 같은 컴포워크 플레인에서는 tree-shaking이 되는 컴포넌트 방식 + SVGO, 프레임워크가 섞였거나 순수 정적 페이지라면 심볼 스프라이트. 공통 규칙은 색은 `currentColor`, 크기는 `1em`, 장식 아이콘은 `aria-hidden` 세 가지였습니다. 시스템을 만들고 나서 "다크 모드에서 아이콘 색 바꿔주세요" 같은 요구가 CSS 한 줄로 끝나게 되었고, 아이콘 복제본 폴더도 없어졌습니다. 작은 규칙이지만 한 번 정해두면 계속 배당이 붙는 투자였습니다.
+
+## 더 알아보기
+
+- MDN의 `currentColor` 문서 — 색상 상속 동작을 정확히 이해하는 데 도움이 됩니다.
+- SVGO 문서의 플러그인 목록 — 활성화/비활성화 옵션을 프로젝트에 맞게 조정할 때 참고하세요.

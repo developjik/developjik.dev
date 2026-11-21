@@ -1,0 +1,136 @@
+---
+title: 'Playwright로 E2E 테스트 자동화하기'
+date: '2025-09-16'
+description: 'Playwright 설치부터 getByRole 셀렉터 전략, 병렬 실행, CI 연동까지 실무 적용 과정을 정리합니다.'
+tags: ['Testing', 'E2E']
+---
+
+# Playwright로 E2E 테스트 자동화하기
+
+## 개요
+
+release마다 "로그인 → 글 작성 → 발행"을 손으로 반복 확인하던 것이 지쳐서 E2E 테스트를 도입했습니다. 여러 도구를 비교한 끝에 자체 러너와 병렬 실행, 자동 대기(wait)를 갖춘 Playwright를 선택했습니다. 설치부터 CI 연동까지의 과정을 정리합니다.
+
+## 설치와 기본 설정
+
+```bash
+pnpm dlx create-playwright@latest
+# TypeScript 기본, 브라우저(Chromium/Firefox/WebKit) 설치 포함
+```
+
+설정은 `playwright.config.ts`에서 관리합니다.
+
+```ts
+import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './e2e',
+  timeout: 30_000,
+  retries: process.env.CI ? 2 : 0,
+  use: {
+    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3000',
+    trace: 'on-first-retry',
+  },
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    { name: 'mobile', use: { ...devices['Pixel 7'] } },
+  ],
+  webServer: {
+    command: 'pnpm dev',
+    url: 'http://localhost:3000',
+    reuseExistingServer: !process.env.CI,
+  },
+});
+```
+
+`webServer` 설정이 특히 좋았습니다. 테스트 실행 시 개발 서버가 없으면 자동으로 띄워주고, 로컬에서는 이미 떠 있는 서버를 재사용합니다.
+
+## 셀렉터 전략: getByRole 우선
+
+E2E 테스트가 잘게 부서지는 가장 흔한 이유는 CSS 셀렉터나 텍스트 선택자입니다. Playwright가 권장하는 방식은 "사용자가 보는 방식"으로 요소를 찾는 것입니다. 우선순위를 정하면 이렇습니다.
+
+1. `getByRole` — 접근성 역할 기반, 사용자 경험과 일치
+2. `getByLabel` / `getByPlaceholder` — 폼 요소
+3. `getByText` — 텍스트 기반
+4. `data-testid` — 마지막 수단
+
+```ts
+import { test, expect } from '@playwright/test';
+
+test('로그인 후 글 작성까지', async ({ page }) => {
+  await page.goto('/login');
+
+  await page.getByLabel('이메일').fill('user@example.com');
+  await page.getByLabel('비밀번호').fill('password123');
+  await page.getByRole('button', { name: '로그인' }).click();
+
+  await expect(page.getByRole('heading', { name: '내 글' })).toBeVisible();
+
+  await page.getByRole('link', { name: '새 글 쓰기' }).click();
+  await page.getByLabel('제목').fill('첫 번째 글');
+  await page.getByRole('button', { name: '발행' }).click();
+
+  await expect(page.getByText('발행되었습니다')).toBeVisible();
+});
+```
+
+`getByRole`로 찾으려면 요소가 접근성 트리에 제대로 노출되어야 하므로, 테스트를 잘 쓰면 접근성도 함께 개선되는 부수 효과가 있었습니다.
+
+## 자동 대기와 디버깅
+
+Playwright는 액션 수행 전 요소가 보이고 활성화될 때까지 자동으로 기다립니다. 덕분에 `sleep(3000)` 같은 취약한 지연이 거의 사라졌습니다. `await expect(...).toBeVisible()` 같은 웹 퍼스트 어설션도 조건이 충족될 때까지 재시도합니다.
+
+디버깅에는 `--debug` 플레이라이트 인스펙터와 `trace: 'on-first-retry'` 트레이스 뷰어가 유용했습니다. 실패 시 스크린샷·비디오도 남길 수 있습니다.
+
+```ts
+use: {
+  screenshot: 'only-on-failure',
+  video: 'retain-on-failure',
+},
+```
+
+## 병렬 실행
+
+Playwright는 기본적으로 파일 단위로 워커를 나눠 병렬 실행합니다. 테스트가 서로 독립하도록 작성하는 것이 전제입니다. 계정이나 데이터가 겹치는 테스트는 `test.describe.configure({ mode: 'serial' })`로 직렬로 묶거나, 데이터를 격리하는 편이 좋습니다.
+
+```ts
+test.describe.configure({ mode: 'parallel' });
+```
+
+실제로 30여 개 테스트가 직렬 4분 걸리던 것이 워커 병렬로 1분대로 줄었습니다.
+
+## CI 연동
+
+공식 액션으로 브라우저 설치와 캐시를 처리합니다.
+
+```yaml
+name: E2E
+on: [deployment_status]
+
+jobs:
+  e2e:
+    if: github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps
+      - run: pnpm exec playwright test
+        env:
+          E2E_BASE_URL: ${{ github.event.deployment_status.target_url }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+```
+
+배포 성공 후 스테이징 환경에서 돌리도록 `deployment_status` 트리거를 사용했고, 실패 시 리포트를 아티팩트로 올려 원인 확인에 쓰고 있습니다.
+
+## 마무리
+
+Playwright 도입 후 "방금 뿌린 릴리스, 수동으로 확인해야 하나?"라는 부담이 확실히 줄었습니다. 핵심은 도구보다 셀렉터 전략과 테스트 독립성이었습니다. `getByRole` 우선 원칙과 자동 대기에 익숙해지면 유지보수 비용이 낮은 E2E 스위트를 만들 수 있습니다.
