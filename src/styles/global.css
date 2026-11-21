@@ -26,8 +26,8 @@
     "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
     "Segoe UI", Roboto, "Apple SD Gothic Neo", sans-serif;
   --font-display:
-    "Noto Serif KR Variable", "Nanum Myeongjo", Batang, Georgia,
-    "Times New Roman", serif;
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, "Apple SD Gothic Neo", sans-serif;
   --font-mono:
     "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular,
     Menlo, Consolas, monospace;
@@ -44,22 +44,22 @@
 
 :root {
   color-scheme: light;
-  --bg: #f9f7f0;
-  --surface: #fffefb;
-  --raised: #f1ede0;
-  --line: #e0d9c6;
-  --line-strong: #b9b096;
-  --ink: #1d1912;
-  --soft: #5c5546;
-  --faint: #918977;
-  --accent: #1f6a4d;
-  --accent-strong: #144f39;
-  --accent-ink: #f7f4ea;
-  --ok: #1e7a4c;
-  --warn: #9a6a12;
-  --accent-soft: rgba(31, 106, 77, 0.07);
-  --code-bg: #f3efe2;
-  --shadow-pop: 0 18px 50px -18px rgba(29, 25, 18, 0.3);
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --raised: #efede6;
+  --line: #e2e0da;
+  --line-strong: #c9c6bd;
+  --ink: #17161a;
+  --soft: #55524c;
+  --faint: #a8a49c;
+  --accent: #4d7c0f;
+  --accent-strong: #3f6a0c;
+  --accent-ink: #f7f6f2;
+  --ok: #4d7c0f;
+  --warn: #b45309;
+  --accent-soft: rgba(77, 124, 15, 0.08);
+  --code-bg: #f1efe9;
+  --shadow-pop: 0 18px 50px -18px rgba(23, 22, 26, 0.22);
   /* 본문 단 폭 — 레퍼런스 클러스터(600~656px) 기준 640px */
   --prose-width: 40rem;
   /* 모션 토큰 — 리셋 스킨 공통 타이밍 언어 */
@@ -72,22 +72,103 @@
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #16140e;
-  --surface: #1c1912;
-  --raised: #262117;
-  --line: #39321f;
-  --line-strong: #575034;
-  --ink: #ece6d6;
-  --soft: #a89f88;
-  --faint: #766e59;
-  --accent: #7cc79e;
-  --accent-strong: #a5dcbc;
-  --accent-ink: #0f1712;
-  --ok: #5cbf87;
-  --warn: #d9a13c;
-  --accent-soft: rgba(124, 199, 158, 0.09);
-  --code-bg: #12100a;
+  --bg: #0e0e0e;
+  --surface: #141414;
+  --raised: #1a1a1a;
+  --line: #232323;
+  --line-strong: #343434;
+  --ink: #ededea;
+  --soft: #8f8f8a;
+  --faint: #575754;
+  --accent: #c4f542;
+  --accent-strong: #d9ff7a;
+  --accent-ink: #0e0e0e;
+  --ok: #7ee787;
+  --warn: #e0b341;
+  --accent-soft: rgba(196, 245, 66, 0.08);
+  --code-bg: #0a0a0a;
   --shadow-pop: 0 18px 50px -18px rgba(0, 0, 0, 0.7);
+}
+
+/* ---------- M2 미세모션 : 슬라이딩 언더라인 ---------- */
+.nav-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 1.5px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.nav-link:hover::after,
+.nav-link:focus-visible::after,
+.nav-link[aria-current="page"]::after {
+  transform: scaleX(1);
+}
+
+/* ---------- M2 미세모션 : 카드 광택 스윕 ---------- */
+.card-hover {
+  position: relative;
+  overflow: hidden;
+}
+.card-hover::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -70%;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, var(--accent-soft), transparent);
+  transform: skewX(-18deg);
+  transition: left var(--dur-slow) var(--ease-out);
+  pointer-events: none;
+  z-index: 0;
+}
+.card-hover:hover::before {
+  left: 130%;
+}
+.card-hover:hover {
+  border-color: var(--accent);
+}
+
+/* ---------- M2 미세모션 : 버튼 스프링 ---------- */
+.btn {
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+.btn:hover {
+  transform: translateY(-1px);
+}
+.btn:active {
+  transform: translateY(0) scale(0.97);
+}
+.btn-primary:hover {
+  box-shadow: 0 10px 24px -10px var(--accent-soft);
+}
+
+/* ---------- M2 : 커스텀 스크롤바 ---------- */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
 }
 
 /* ---------- base ---------- */
@@ -203,7 +284,7 @@ h4 {
   transition: border-color 0.18s ease;
 }
 .card-hover:hover {
-  border-color: var(--ink);
+  border-color: var(--line-strong);
 }
 
 .chip {
@@ -244,7 +325,10 @@ a:hover > .chip,
   border: 1px solid var(--ink);
   color: var(--ink);
   background: transparent;
-  transition: all 0.16s ease;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
   cursor: pointer;
 }
 .btn:hover {
@@ -289,15 +373,6 @@ a:hover > .chip,
 }
 .nav-link[aria-current="page"] {
   color: var(--accent);
-}
-.nav-link[aria-current="page"]::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -3px;
-  height: 2px;
-  background: var(--accent);
 }
 
 /* 본문 링크: 잉크 밑줄 → 액센트 */
