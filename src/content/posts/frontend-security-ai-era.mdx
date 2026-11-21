@@ -1,0 +1,134 @@
+---
+title: 'AI 시대의 프론트엔드 보안 — 에이전트가 넓힌 공격면'
+date: '2026-09-19'
+description: '에이전트가 쓴 코드가 배포되고, 웹 콘텐츠가 에이전트의 입력이 되면서 프론트엔드의 공격면은 두 방향으로 넓었습니다. 전형적 취약 패턴과 간접 프롬프트 인젝션, CSP·Trusted Types·새니타이즈의 최신 기본기를 정리한 플레이북입니다.'
+tags: ['보안', 'XSS', 'CSP', '프롬프트 인젝션', '에이전트', '프론트엔드']
+---
+
+# AI 시대의 프론트엔드 보안 — 에이전트가 넓힌 공격면
+
+코드를 에이전트가 쓰고, 웹 콘텐츠가 에이전트의 입력이 되는 시대가 됐습니다. 보안 관점에서 이것은 공격면이 정확히 두 방향으로 넓어졌다는 뜻입니다. 한쪽은 개발자 측(에이전트가 쓴 취약한 코드가 그대로 배포)이고, 다른 쪽은 런타임 측(내 서비스가 다른 사람의 에이전트를 공격하는 매개가 되거나, 내 에이전트가 오염된 웹을 읽음)입니다. 이 글은 두 방향을 각각 짚고, 2026년 시점의 방어 기본기를 정리한 플레이북입니다.
+
+## 문제 정의: 공격면이 두 방향으로 넓었다
+
+1. **코드 생산 측** — 에이전트는 "주어진 환경에서 동작하는 코드"를 잘 쓰지만, 동작과 무관한 보안 속성은 기본적으로 신경 쓰지 않습니다. 리뷰를 에이전트에게 맡기면 취약점까지 같은 관성으로 승인될 수 있습니다.
+2. **콘텐츠 소비 측** — 브라우저 에이전트와 AI 검색이 웹페이지를 읽는 시대에, 웹 콘텐츠는 사람이 아니라 모델의 입력이 됩니다. OWASP는 이를 간접 프롬프트 인젝션으로 분류합니다(아래에서 다룹니다).
+
+둘 다 기존 지식의 연장이지만, 발생 빈도와 경로가 달라졌으므로 대응도 갱신이 필요합니다.
+
+## 에이전트가 쓴 코드의 전형적 취약 3종
+
+에이전트 생성 코드에서 제가 반복해서 본 패턴입니다. 셋 다 "로컬에서는 잘 동작해서" 통과됩니다.
+
+### 1. sanitize 누락된 dangerouslySetInnerHTML
+
+마크다운 렌더링이나 API 응답 출력에서 가장 흔합니다. React의 [dangerouslySetInnerHTML](https://react.dev/reference/react-dom/components/common)은 이름 그대로 위험하며, React는 이 값을 새니타이즈해 주지 않습니다.
+
+```tsx
+import DOMPurify from 'dompurify';
+
+// 취약: 외부 HTML을 그대로 주입
+function CommentVuln({ html }: { html: string }) {
+  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+// 안전: [DOMPurify](https://github.com/cure53/DOMPurify)로 세척 후 주입
+function CommentSafe({ html }: { html: string }) {
+  return <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />;
+}
+```
+
+### 2. 오픈 리다이렉트
+
+`?next=` 파라미터를 검증 없이 이동에 쓰는 패턴입니다. 피싱의 신뢰성을 높이는 데 쓰이며 [OWASP 치트시트](https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html)가 오래전부터 경고해 온 취약점인데, 에이전트가 "동작 편의"로 자주 만들어 냅니다.
+
+```ts
+// 취약: 아무 URL이나 이동
+router.push(searchParams.get('next') ?? '/');
+
+// 안전: 화이트리스트로 시작하는 경로만 허용
+const ALLOWED_PREFIXES = ['/dashboard', '/settings'];
+function safeNext(raw: string | null): string {
+  const target = raw ?? '/';
+  return ALLOWED_PREFIXES.some((p) => target.startsWith(p)) ? target : '/';
+}
+```
+
+### 3. 죽은 방어 코드
+
+"일단 encodeURIComponent만 해두자", "TODO: 나중에 검증" 같은 반쪽짜리 방어입니다. 사람 리뷰라면 지적할 확률이 높지만, 동작 확인에 몰입한 에이전트 리뷰는 넘어갑니다.
+
+### 원인과 완화
+
+원인은 단순합니다. 에이전트의 최적화 목표에 보안 속성이 없고, 흔한 학습 데이터의 오래된 예시가 그대로 재생산되기도 합니다. 완화는 사람 리뷰를 더 하는 것이 아니라 **기계적 게이트**입니다. 금지 패턴(`dangerouslySetInnerHTML`, `eval`, 검증 없는 리다이렉트)은 린터 레벨에서 차단하고, 코드 리뷰 에이전트에는 보안 가드레일 프롬프트를 상시 장착합니다. 이 부분은 [PR 리뷰 에이전트 가드레일 글](/posts/frontend-ai-pr-review-agent-guardrails)에서 다룬 방식을 그대로 쓰면 됩니다.
+
+## 간접 프롬프트 인젝션: 웹 콘텐츠가 에이전트 입력이 되는 시대
+
+[OWASP LLM Top 10](https://genai.owasp.org/llm-top-10/2025/llm01-prompt-injection)의 1위 항목이 프롬프트 인젝션입니다. 그중 간접 프롬프트 인젝션은 모델이 외부 소스(웹페이지, 파일)를 읽을 때, 그 콘텐츠에 숨은 지시문이 모델 행동을 바꾸는 공격입니다. 사람 눈에 보이지 않아도 모델은 읽습니다.
+
+프론트엔드 개발자에게 남는 두 가지 책임은 이렇습니다.
+
+- **내 페이지가 무기가 되지 않게** — 댓글·위키·리뷰처럼 사용자가 HTML을 남길 수 있는 필드에 `display:none` 지시문이나 보이지 않는 텍스트(`color:transparent` 등)를 심지 못하게 하는 것은 이제 XSS 방어와 같은 무게의 기본기입니다. 새니타이즈가 이 방어의 뼈대입니다.
+- **내 제품의 에이전트가 외부 콘텐츠를 다룰 때** — 요약·검색 기능이 외부 웹을 긁어 온다면, 그 텍스트는 "데이터"가 아니라 "적대적 입력"으로 다뤄야 합니다. 지시 해석과 데이터 처리의 분리, 도구 권한 최소화가 [OWASP 프롬프트 인젝션 예방 치트시트](https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html)가 권고하는 방향입니다.
+
+완벽한 방어가 없는 영역이라, 프론트엔드에서 할 수 있는 것에 집중하는 것이 현실적입니다.
+
+## 최신 기본기: CSP·Trusted Types·새니타이즈
+
+방어의 3층 구조는 변하지 않았지만, 각 층의 2026년 버전이 있습니다.
+
+**1층, 엄격한 CSP.** 인라인 스크립트를 허용하지 않는 nonce 기반 [strict CSP](https://web.dev/articles/strict-csp)가 권장 표준입니다.
+
+```text
+Content-Security-Policy:
+  script-src 'nonce-{RANDOM}' 'strict-dynamic';
+  object-src 'none';
+  base-uri 'none';
+  frame-ancestors 'none';
+```
+
+**2층, Trusted Types.** DOM XSS 싱크(`innerHTML` 등)로 향하는 값을 타입 시스템으로 강제하는 API입니다([web.dev 가이드](https://web.dev/articles/trusted-types)). 2026-02부터 `require-trusted-types-for` 지시문이 [Baseline Newly available](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/require-trusted-types-for)로 들어왔으므로, 이제 브라우저 지원을 핑계로 미룰 단계는 지났습니다.
+
+```ts
+const policy = trustedTypes.createPolicy('app-html', {
+  createHTML: (input: string) => DOMPurify.sanitize(input),
+});
+
+// 이후 어플리케이션 전체에서 innerHTML 계열 싱크는 이 정책만 통과
+el.innerHTML = policy.createHTML(untrusted);
+```
+
+**3층, 새니타이즈.** DOMPurify는 기본 설정이 안전한 방향으로 잡혀 있어, 커스터마이징은 필요할 때만 합니다. 커스텀 허용 목록을 만드는 순간 그 목록이 새로운 공격 표면이 됨을 기억해야 합니다.
+
+서버 렌더링에서도 같은 원칙이 적용됩니다. [MDN의 CSP 안내](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP)는 헤더 수준 정책의 출발점으로 충분합니다.
+
+## 서플라이체인: 요약만 하고 넘기기
+
+npm 의존성을 통한 공격(오픈소스 패키지 탈취, 설치 스크립트 악용)도 에이전트 시대에 훨씬 쉬워졌습니다. "필요한 패키지를 찾아서 설치하라"는 지시 하나로 공급망이 오염될 수 있기 때문입니다. 대응 체계(위장 패키지 식별, lockfile 감사, 설치 스크립트 정책)는 [프론트엔드 AI 서플라이체인 사고 대응 플레이북](/posts/frontend-ai-supply-chain-incident-playbook)에 이미 정리해 두었으므로 여기서는 원칙만 남깁니다. 에이전트가 제안한 패키지명은 사람이 검증하고, 추가는 lockfile 커밋으로 추적합니다.
+
+## 체크리스트
+
+- [ ] dangerouslySetInnerHTML 사용처를 전수 조사하고 전부 새니타이즈했는가
+- [ ] 리다이렉트 대상 URL은 화이트리스트로 검증하는가
+- [ ] 금지 패턴이 린트/CI 게이트로 굳어 있는가
+- [ ] nonce 기반 strict CSP를 헤더로 내려오게 했는가
+- [ ] require-trusted-types-for 도입을 검토했는가 (2026-02 Baseline)
+- [ ] 사용자 생성 HTML에서 보이지 않는 텍스트를 차단하는가
+- [ ] 외부 콘텐츠를 처리하는 에이전트 기능의 도구 권한을 최소화했는가
+- [ ] 에이전트가 설치한 의존성은 lockfile diff로 검증하는가
+
+## 마치기
+
+AI 시대의 프론트엔드 보안은 새로운 위협 이론보다, 알고 있던 방어를 기계의 속도에 맞게 자동화하는 일에 가깝습니다. 에이전트가 쓴 코드는 사람이 쓴 코드와 같은 취약점을 더 빠르게 양산하고, 웹 콘텐츠는 사람이 아니라 모델에게 읽히는 입력이 됐습니다. 새니타이즈·CSP·Trusted Types라는 오래된 3층 방어를 게이트로 만들어 두는 것, 그것이 지금 시점의 정답에 가장 가까웠습니다.
+
+## 레퍼런스
+
+- [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llm-top-10/2025/llm01-prompt-injection) — 프롬프트 인젝션의 정의와 간접 인젝션 시나리오
+- [OWASP 프롬프트 인젝션 예방 치트시트](https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html) — 권고 대응 목록
+- [OWASP Unvalidated Redirects and Forwards](https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html) — 오픈 리다이렉트 방어
+- [React 공식 문서 — dangerouslySetInnerHTML](https://react.dev/reference/react-dom/components/common) — 원시 HTML 주입의 위험 경고
+- [DOMPurify](https://github.com/cure53/DOMPurify) — 기본값이 안전한 HTML 새니타이저
+- [strict CSP — web.dev](https://web.dev/articles/strict-csp) — nonce 기반 CSP 레시피
+- [Trusted Types — web.dev](https://web.dev/articles/trusted-types) — DOM XSS 싱크 잠금 가이드
+- [CSP — MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP) — 콘텐츠 보안 정책 안내
+- [require-trusted-types-for — MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/require-trusted-types-for) — 2026-02 Baseline Newly available

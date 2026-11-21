@@ -1,0 +1,191 @@
+---
+title: 'View Transitions API 완벽 가이드 — 같은 문서 전환부터 크로스 도큐먼트까지'
+date: '2025-05-09'
+description: 'View Transitions API는 DOM 상태 변화 사이를 브라우저가 직접 애니메이션으로 이어 주는 기능입니다. 같은 문서 전환, 가상 요소 커스터마이징, Chrome 126의 크로스 도큐먼트 전환과 접근성까지 정리한 완벽 가이드.'
+tags: ['CSS', 'View Transitions', '브라우저 API', '애니메이션', '프론트엔드']
+---
+
+# View Transitions API 완벽 가이드 — 같은 문서 전환부터 크로스 도큐먼트까지
+
+## 개요
+
+화면 전환 애니메이션은 오랫동안 직접 구현해야 하는 영역이었습니다. 리스트 아이템이 모달로 펼쳐지는 효과 하나 만들려면 이전 상태의 위치를 측정하고, 새 상태를 그린 뒤, `transform`으로 차이를 보간하는 FLIP 기법을 손으로 짜야 했습니다. View Transitions API는 이 일을 브라우저가 알아서 하게 해 줍니다.
+
+이 API는 [2023년 Chrome 111에서 같은 문서(SPA) 전환으로 시작](https://developer.chrome.com/blog/spa-view-transitions-land/)되었고, [2024년 6월 Chrome 126부터는 서로 다른 문서(MPA) 사이의 전환](https://developer.chrome.com/blog/new-in-chrome-126)도 지원합니다. Safari도 18.0에서 같은 문서 전환을 지원하기 시작했고 [Safari 18.2(2024-12-09)부터는 크로스 도큐먼트 전환까지 지원](https://webkit.org/blog/16301/webkit-features-in-safari-18-2)합니다. 브라우저 기반이 갖춰지는 중이라 이 시점에 정리해 두면 좋겠다고 생각했습니다. 예전에 [Broadcast Channel API를 다루며](/posts/broadcast-channel-api) 느꼈던 것과 비슷하게, 최신 브라우저 API는 "지원 브라우저에서만 주는 보너스"로 설계하면 부담이 없습니다.
+
+이 글은 [Chrome 개발자 문서](https://developer.chrome.com/docs/web-platform/view-transitions)와 [MDN의 View Transition API 문서](https://developer.mozilla.org/en-US/docs/Web/API/View_Transitions_API)를 기준으로, 작동 원리 → 같은 문서 전환 → 커스터마이징 → 크로스 도큐먼트 전환 → 접근성 순으로 정리합니다.
+
+## 왜 필요한가: 상태 전환 애니메이션의 어려움
+
+먼저 이 API가 없을 때의 문제를 짚어 보면 왜 있는지가 명확해집니다.
+
+- **이전 상태와 새 상태를 동시에 알아야 합니다.** 진행 중인 요소와 새로 등장하는 요소의 위치·크기를 각각 측정해서 대응 관계를 만들어야 합니다.
+- **한 프레임 안에서 처리해야 합니다.** 측정과 반영 사이에 렌더링이 끼면 깜빡임이 생깁니다.
+- **진입과 퇴장을 동시에 연출해야 합니다.** 크로스페이드 하나에도 레이어 관리가 따라옵니다.
+
+View Transitions API는 이 전부를 브라우저에게 맡깁니다. 개발자는 "무엇이 바뀌는지"만 알려 주면 "어떻게 보여 줄지"는 브라우저가 처리합니다.
+
+## 핵심 개념: 작동 원리
+
+[`document.startViewTransition()`](https://developer.mozilla.org/en-US/docs/Web/API/Document/startViewTransition)에 콜백을 넘기면 브라우저는 다음 순서로 동작합니다. [MDN의 사용법 문서](https://developer.mozilla.org/en-US/docs/Web/API/View_Transitions_API/Using) 기준입니다.
+
+1. 현재 페이지의 **스냅샷(캡처)**을 만듭니다.
+2. 인자로 받은 콜백을 실행해 DOM을 다음 상태로 업데이트합니다.
+3. 새 상태의 라이브 표현을 캡처합니다.
+4. 두 표현을 `::view-transition-old`(이전 상태)와 `::view-transition-new`(새 상태) 가상 요소에 올리고 문서 위의 오버레이에서 애니메이션을 재생합니다.
+
+기본 동작은 루트 요소끼리의 크로스페이드입니다. 실제 DOM은 콜백이 바꾼 대로 즉시 갱신되고, 애니메이션은 어디까지나 캡처된 이미지의 연출이라는 점이 중요합니다. 그래서 스크린 리더 같은 보조 기술에는 이미 새 DOM이 전달됩니다.
+
+## 같은 문서 전환(SPA): `document.startViewTransition`
+
+가장 기본이 되는 사용법부터 보겠습니다. 다크 모드 토글에 전환을 넣는, [Chrome 문서의 대표 예시](https://developer.chrome.com/docs/web-platform/view-transitions/same-document)로 자주 쓰이는 패턴입니다.
+
+```js
+function toggleTheme() {
+  const update = () => {
+    document.documentElement.classList.toggle('dark');
+  };
+
+  // 지원하지 않는 브라우저에서는 그냥 즉시 반영
+  if (!document.startViewTransition) {
+    update();
+    return;
+  }
+
+  document.startViewTransition(update);
+}
+```
+
+`startViewTransition`은 `ViewTransition` 객체를 반환하고, 세 가지 Promise를 제공합니다.
+
+- `updateCallbackDone`: DOM 업데이트 콜백의 성공/실패
+- `ready`: 가상 요소가 만들어지고 애니메이션이 시작되기 직후
+- `finished`: 애니메이션이 끝났거나(완료·중단) 실패했을 때
+
+```js
+async function moveToNextState(render) {
+  const transition = document.startViewTransition(() => render());
+
+  await transition.updateCallbackDone; // DOM은 안전하게 갱신됨
+  await transition.finished;           // 전환 연출까지 종료
+}
+```
+
+`ready`를 활용하면 JavaScript로 애니메이션을 직접 제어하는 것도 가능하지만, 대부분의 연출은 CSS로 충분합니다.
+
+## 커스터마이징: `view-transition-name`과 가상 요소
+
+기본 크로스페이드에 만족하지 못할 때 쓰는 도구가 두 가지입니다.
+
+### `view-transition-name`으로 요소 지정하기
+
+특정 요소를 별도의 전환 그룹으로 분리하려면 CSS로 이름을 지정합니다.
+
+```css
+.hero-image {
+  view-transition-name: hero;
+}
+```
+
+이제 이 요소는 루트 전환과 별개로 자신만의 이전/새 스냅샷 쌍을 가집니다. 목록에서 상세로 이어지는 연출, 공통 헤더를 고정하고 콘텐츠만 크로스페이드하는 연출이 이 조합으로 만들어집니다. 단, **같은 문서 안에서 `view-transition-name`은 고유**해야 하며, 이름은 `none`을 제외한 임의의 식별자를 씁니다. 요소가 많아 이름 붙이기 어려울 때를 위해 Safari 18.2는 `view-transition-name: auto`를 지원한다고 [WebKit 발표 글](https://webkit.org/blog/16301/webkit-features-in-safari-18-2)은 설명합니다.
+
+### `::view-transition-old` / `::view-transition-new`로 애니메이션 바꾸기
+
+가상 요소는 문서 위 오버레이의 트리 구조로 존재합니다. `::view-transition-group`(그룹 박스), `::view-transition-image-pair`(新旧 이미지 쌍), 그리고 각 이미지인 `::view-transition-old`와 `::view-transition-new`입니다. 애니메이션을 바꾸는 예는 다음과 같습니다.
+
+```css
+@keyframes slide-out {
+  to {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+::view-transition-old(root) {
+  animation: slide-out 200ms ease both;
+}
+
+::view-transition-new(root) {
+  animation: slide-in 200ms ease both;
+}
+```
+
+요소 단위로 지정했다면 `::view-transition-old(hero)`처럼 해당 이름을 씁니다. 전환별로 다른 연출을 주고 싶다면 브라우저가 제공하는 뷰 전환 타입(Chrome/Safari 최신 버전에서 지원)으로 변형을 만드는 방법도 있습니다.
+
+## 크로스 도큐먼트 전환(MPA): `@view-transition`
+
+여기까지는 한 문서 안의 상태 전환이었습니다. 진짜 흥미로운 지점은 **일반적인 페이지 이동, 즉 MPA에서도 이 연출을 쓸 수 있게 되었다**는 것입니다. Chrome 126(2024년 6월 11일 안정 버전)부터 동작하며, 놀랍게도 CSS 한 줄로 켭니다.
+
+```css
+@view-transition {
+  navigation: auto;
+}
+```
+
+이 규칙이 있으면 같은 출처(origin) 안에서의 문서 이동에 브라우저가 자동으로 뷰 전환을 넣습니다. MPA는 상태 복원이나 스크롤 위치처럼 SPA에서 손으로 관리하던 것들을 브라우저가 원래 하던 대로 하면서, SPA 같은 연출까지 얻는 셈입니다. [Google I/O 2024 업데이트 글](https://developer.chrome.com/blog/view-transitions-update-io24)은 이 조합을 "MPA의 부활"이라는 맥락에서 소개합니다.
+
+세부 조건은 다음과 같습니다.
+
+- 두 문서가 **같은 출처**여야 합니다.
+- 양쪽 문서 모두 `@view-transition` 규칙을 가지고 있어야 합니다.
+- [MDN의 `@view-transition` 문서](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@view-transition) 기준으로 아직 모든 주요 브라우저에서 사용 가능한 기능은 아니므로, 지원 여부를 확인하며 사용해야 합니다.
+
+### MPA에서의 활용 패턴
+
+- **기본 크로스페이드**: 위 한 줄만으로 모든 same-origin 이동이 부드러워집니다. 문서를 새로 불러오는 사이가 매끄러워져서 체감이 꽤 큽니다.
+- **요소 이어 보이기**: 두 문서에 같은 `view-transition-name`을 지정하면(예: 목록 페이지의 썸네일과 상세 페이지의 히어로 이미지), 페이지를 넘어가는 동안 그 요소가 morphing되듯 이어집니다.
+- **이벤트로 세밀 제어**: 크로스 도큐먼트 전환에서는 `pageswap`(이전 문서에서)과 `pagereveal`(새 문서에서) 이벤트를 제공합니다. Safari 18.2도 이 이벤트들을 지원한다고 [WebKit 글](https://webkit.org/blog/16301/webkit-features-in-safari-18-2)은 전합니다.
+
+## 주의점: 접근성
+
+가상 요소는 문서 위 오버레이의 트리 구조로 존재합니다. `::view-transition-group`(그룹 박스), `::view-transition-image-pair`(이전/새 이미지 쌍), 그리고 각 이미지인 `::view-transition-old`와 `::view-transition-new`입니다. 애니메이션을 바꾸는 예는 다음과 같습니다.
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+```
+
+이 스니펫은 [Chrome 개발자 문서](https://developer.chrome.com/docs/web-platform/view-transitions)가 권장하는 형태입니다. 여기에 더해 "전환이 실패해도 기능은 동작해야 한다"를 설계 원칙으로 삼으면, 애초에 이 API는 점진적 향상으로만 쓰는 것이 자연스러워집니다. 앞서 본 기능 감지 분기(`document.startViewTransition` 유무 확인)가 그 첫 단계입니다.
+
+## 브라우저 지원 정리 (2025년 5월 기준)
+
+- **Chrome / Edge 111+**: 같은 문서 전환 (2023년 3월)
+- **Chrome / Edge 126+**: 크로스 도큐먼트 전환 (2024년 6월 11일)
+- **Safari 18.0**: 같은 문서 전환 (2024년 9월)
+- **Safari 18.2**: 크로스 도큐먼트 전환, `view-transition-name: auto`, 뷰 전환 클래스·타입, `pageswap`/`pagereveal` (2024년 12월 9일)
+
+세부 기능별 지원 현황은 계속 바뀌고 있으니 배포 시점에는 [MDN의 브라우저 호환성 표](https://developer.mozilla.org/en-US/docs/Web/API/View_Transitions_API)를 직접 확인하시길 권합니다. 프레임워크에서도 이 API를 감싼 추상화가 늘어나는 추세라, 직접 다루는 감각을 지금 길러 두면 그 위에서도 디버깅이 쉽습니다.
+
+## 정리
+
+- View Transitions API는 상태 전환 애니메이션의 측정·합성·재생을 브라우저에게 위임합니다. 진입점은 `document.startViewTransition` 하나입니다.
+- 연출 커스터마이징은 `view-transition-name`으로 요소를 분리하고 `::view-transition-old`/`::view-transition-new` 가상 요소를 애니메이션하는 CSS 작업입니다.
+- Chrome 126과 Safari 18.2부터는 `@view-transition` 한 줄로 MPA에도 전환이 들어갑니다. same-origin 조건과 지원 브라우저만 확인하면 됩니다.
+- 어떤 경우에도 `prefers-reduced-motion` 대응과 기능 감지를 함께 두고, 전환은 어디까지나 점진적 향상으로 설계합니다.
+
+화면 전환의 기본값이 "브라우저가 알아서"가 되는 방향은 계속 확장될 것 같습니다. 지금은 문서 전환 하나에도 이렇게 정리해 두면, 이후 기능들이 추가될 때 하나씩 얹기만 하면 됩니다.
+
+## 레퍼런스
+
+- [Smooth transitions with the View Transition API (Chrome 개발자 문서)](https://developer.chrome.com/docs/web-platform/view-transitions) — 같은 문서/크로스 도큐먼트 전환 전체를 다루는 공식 가이드
+- [Same-document view transitions for SPAs](https://developer.chrome.com/docs/web-platform/view-transitions/same-document) — SPA에서의 사용법과 `prefers-reduced-motion` 스니펫
+- [SPA view transitions land in Chrome 111](https://developer.chrome.com/blog/spa-view-transitions-land/) — 2023년 Chrome 111 출시 안내
+- [New in Chrome 126](https://developer.chrome.com/blog/new-in-chrome-126) — 크로스 도큐먼트 전환 지원 소식
+- [Chrome 126 릴리스 노트](https://developer.chrome.com/release-notes/126) — 안정 버전 2024년 6월 11일 배포 기록
+- [What's new in view transitions? (Google I/O 2024)](https://developer.chrome.com/blog/view-transitions-update-io24) — 크로스 도큐먼트 전환의 방향성 소개
+- [Using the View Transition API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/View_Transitions_API/Using) — 캡처 구조와 가상 요소 트리 설명
+- [Document: startViewTransition() (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Document/startViewTransition) — API 시그니처와 Promise 레퍼런스
+- [@view-transition CSS at-rule (MDN)](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@view-transition) — 크로스 도큐먼트 전환 활성화 규칙
+- [WebKit Features in Safari 18.2](https://webkit.org/blog/16301/webkit-features-in-safari-18-2) — Safari 18.2의 크로스 도큐먼트 전환 및 부가 기능 지원

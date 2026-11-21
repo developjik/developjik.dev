@@ -1,0 +1,101 @@
+---
+title: '웹 플랫폼 2026 — Baseline의 시대'
+date: '2026-10-11'
+description: '브라우저 지원 표기가 Baseline이라는 공용어로 정착한 2026년의 웹 플랫폼을 점검합니다. Baseline의 정의와 도구 생태계, Node.js의 TypeScript 네이티브 실행, import maps, Speculation Rules API까지 표준 동향 중심의 분석입니다.'
+tags: ['웹 플랫폼', 'Baseline', 'Node.js', 'TypeScript', 'import maps', 'Speculation Rules']
+---
+
+# 웹 플랫폼 2026 — Baseline의 시대
+
+"이 기능, 이제 써도 되나요?" 프론트엔드에서 가장 잦은 이 질문의 답이 몇 년 전까지는 caniuse 표의 개인적 해석이었습니다. 2026년의 답은 한 문장으로 수렴합니다. "Baseline이신가요, 그리고 Newly인가 Widely인가." 이 글에서는 [Baseline](https://web.dev/baseline)이 어떻게 지원 표기의 공용어가 됐는지에서 시작해, 올해 시점에서 확인되는 플랫폼 동향 — Node.js의 TypeScript 네이티브 실행, import maps, Speculation Rules API — 을 표준 관점에서 정리합니다. 런타임과 PWA는 각각 [엣지 런타임 글](/posts/understanding-edge-runtime), [PWA 글](/posts/understanding-progressive-web-app)에서 다뤘으므로 여기선 겹치지 않게 플랫폼 표준만 봅니다.
+
+## Baseline: 지원 표기의 공용어가 된 문법
+
+Baseline은 웹 플랫폼 기능의 브라우저 지원 상태를 두 단계로 표기하는 체계입니다. [정의 개정 글](https://web.dev/blog/baseline-definition-update)에서 확정된 현재 규칙은 이렇습니다.
+
+- **Newly available** — 코어 브라우저(Chrome·Edge·Firefox·Safari, 모바일 포함) 전부에서 상호 운용되는 시점
+- **Widely available** — Newly available 시점에서 30개월 경과. 실측 데이터에서 대부분의 기능이 이 시점까지 전 세계 약 95% 사용자에게 도달한다는 근거로 정해진 선
+
+중요한 것은 이 정의가 특정 회사의 마케팅이 아니라 [WebDX 커뮤니티 그룹](https://github.com/web-platform-dx/)이 웹 플랫폼 전체를 매핑한 [web-features 데이터셋](https://web.dev/articles/baseline-tools-web-features) 위에서 운영된다는 점입니다. 그 결과가 도구 생태계의 정착입니다. MDN 문서의 Baseline 배지([MDN의 Baseline 소개](https://developer.mozilla.org/en-US/blog/baseline-evolution-on-mdn/)), web-features npm 패키지 기반의 커스텀 도구, 그리고 web.dev의 [월간 Baseline 다이제스트](https://web.dev/blog/baseline-digest-aug-2026)까지. "쓸 수 있는지"를 묻는 질문에 데이터로 답하는 인프라가 완성된 것입니다.
+
+실무 적용은 단순합니다. [타겟을 고르는 공식 가이드](https://web.dev/articles/how-to-choose-your-baseline-target)의 권장대로, 보수적인 프로젝트는 "Widely available만", 사용자 브라우저가 최신인 서비스는 "Newly available부터" 같은 상한선을 정해 두는 것입니다. 저는 블로그처럼 관리 부담을 낮추고 싶은 곳은 Widely, 사이드 프로젝트 실험은 Newly로 나눠 쓰고 있습니다.
+
+## Node.js: TypeScript 네이티브 실행의 정착
+
+서버 쪽의 올해 화제는 "빌드 없이 .ts 실행"의 완성입니다. 공식 [타입스크립트 모듈 문서](https://nodejs.org/api/typescript.html)의 이력이 그대로 연대기입니다.
+
+- v22.6.0(2024-08): `--experimental-strip-types`로 실험 도입
+- [v23.6.0(2025-01)](https://nodejs.org/en/blog/release/v23.6.0): 플래그 없이 타입 스트리핑 활성화
+- v22.18.0 / v24.3.0: 실험 경고 제거
+- v24.12.0 / v25.2.0: 타입 스트리핑 stable
+- v26.0.0: `--experimental-transform-types` 플래그 제거
+
+그리고 [Node.js 24 'Krypton'이 2025-10-28에 LTS로 전환](https://nodejs.org/blog/release/v24.11.0)했습니다. 즉 2026년의 LTS 라인에서는 타입 스트리핑이 플래그도 경고도 없는 기본 동작입니다.
+
+```bash
+# Node 24 LTS: 설정 없이 .ts 실행
+node app.ts
+```
+
+다만 정의를 정확히 잡아야 합니다. 타입 스트리핑은 **타입을 지워 실행**하는 것이지 타입을 검사하지 않습니다([공식 학습 문서](https://nodejs.org/learn/typescript/run-natively)). 검증은 여전히 `tsc --noEmit` 같은 별도 단계의 몫입니다. 또 enum처럼 런타임 변환(erase 불가)이 필요한 문법은 스트리핑 대상에서 제외됩니다. 빌드 도구가 사라진 게 아니라, 빌드의 역할이 "실행 가능하게 만들기"에서 "검증과 번들링"으로 좁혀진 것이 올해의 변화입니다.
+
+## import maps: 브라우저 안의 모듈 해상도
+
+`import maps`는 브라우저가 bare specifier(`import ... from 'preact'`)를 어디서 해석할지 알려주는 선언입니다. 2023년에 [3대 엔진 상호 운용](https://web.dev/blog/import-maps-in-all-modern-browsers)을 달성했고, 그로부터 30개월이 지난 2025-09-27부로 Baseline Widely available이 됐습니다([web-features 탐색기](https://web-platform-dx.github.io/web-features-explorer/features/import-maps/), [MDN 문서](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/script/type/importmap)).
+
+```html
+<script type="importmap">
+  {
+    "imports": {
+      "preact": "https://esm.sh/preact@10.26.9",
+      "preact/": "https://esm.sh/preact@10.26.9/"
+    }
+  }
+</script>
+<script type="module">
+  import { render } from 'preact'; // 번들러 없이 해석됨
+</script>
+```
+
+의미는 "모듈 해상도의 브라우저 회귀"입니다. 번들러가 없으면 bare import를 쓸 수 없다는 제약이 사라졌고, 프로토타입·내부 도구처럼 빌드 체인을 얹기 어색한 지점에서 표준 모듈 시스템을 그대로 쓸 수 있게 됐습니다. 운영 체계는 달라지지 않았습니다 — 버전 고정은 여전히 사람의 책임이고, 벤더링이 필요한 규모라면 번들러가 계속 답입니다. Baseline의 언어로 말하면 "Widely available이므로 도구 선택지가 하나 늘었다"가 정확한 요약입니다.
+
+## Speculation Rules API: 다음 페이지를 미리
+
+Speculation Rules API는 다음 문서를 prefetch·prerender하는 JSON 힌트입니다([MDN](https://developer.mozilla.org/en-US/docs/Web/API/Speculation_Rules_API)). `where` 조건으로 링크를 걸거나 URL 목록을 지정할 수 있고, prerender는 보이지 않는 탭에서 렌더와 스크립트 실행까지 마친 뒤 활성화됩니다.
+
+다만 이 기능은 Baseline이 아닙니다. [web-features 탐색기](https://web-platform-dx.github.io/web-features-explorer/features/speculation-rules/) 기준 **Limited availability**로, Chrome·Edge(109+)는 지원하지만 Firefox는 표준 입장에서 '중립(복잡성 우려)', Safari는 미지원입니다. 그런데도 [Chrome 실측](https://chromestatus.com/metrics/webfeature/popularity)에서 페이지 로드의 약 11.8%가 이 규칙을 담고 있을 만큼 채택이 빠릅니다.
+
+이 조합이 2026년다운 지점입니다. Baseline 밖이라도 "점진적 향상"으로 쓸 수 있는 구조라면 실무 채택은 앞서갑니다. 정리하면 이렇습니다.
+
+- prefetch는 광범위하게 — 비용이 작으므로 널리 심되, 로그아웃·결제처럼 부작용이 있는 URL은 `Sec-Purpose` 헤더로 서버가 걸러야 합니다
+- prerender는 선별적으로 — 리소스 비용이 iframe 한 개 치와 비슷하므로, 방문 확률이 높은 목적지에만
+- 디버깅은 DevTools의 Speculative loads 패널로 — [Chrome 148부터 필터와 HTTP 상태 표시가 강화](https://developer.chrome.com/blog/new-in-devtools-148)됐습니다
+
+## 웹 호환성 정책의 시대정신
+
+개별 기능을 관통하는 흐름이 하나 있습니다. "호환성은 브라우저 벤더의 약속이 아니라 데이터로 검증되는 속성"이라는 관점입니다. Baseline은 그 지표의 이름이 됐고, WebDX의 데이터셋은 지표의 원천이 됐으며, MDN·web.dev·개발 도구가 그 표기를 소비합니다. 그래서 2026년의 호환성 정책 수립은 "caniuse 표를 스크롤하는 일"이 아니라 "프로젝트의 Baseline 상한선을 정하고 web-features 데이터로 자동화하는 일"에 가깝습니다.
+
+제 시사점 정리는 이렇습니다.
+
+- 팀/프로젝트마다 Baseline 상한선(Widely vs Newly)을 문서로 못 박는다
+- 지원 표기가 필요한 자리(문서, 코드 리뷰, 린트 규칙)는 Baseline 용어로 통일한다
+- Baseline 밖 기능은 Speculation Rules처럼 '점진적 향상 가능 여부'로 별도 판정한다
+- Node.js처럼 런타임 표준의 정착도 같은 연대기로 관리한다 (플래그 → 기본 → stable)
+
+## 마치기
+
+웹이 "새 기능의 홍수"에서 "기능 수명의 관리"로 넘어왔습니다. Baseline은 그 관리의 공용어가 됐고, Node의 타입 스트리핑과 import maps는 표준이 도구 의존을 줄이는 방향으로 정착했으며, Speculation Rules는 Baseline 밖에서도 점진적 향상 전략으로 채택되는 사례를 보여 줍니다. 기능 목록을 쫓기보다 이 관점을 붙잡으면, 내년의 변화도 같은 문법으로 읽힙니다.
+
+## 레퍼런스
+
+- [Baseline — web.dev](https://web.dev/baseline) — Baseline 개요와 두 단계 정의
+- [What has changed? (Baseline 정의 개정)](https://web.dev/blog/baseline-definition-update) — Newly/Widely available과 30개월 근거
+- [How to choose your Baseline target](https://web.dev/articles/how-to-choose-your-baseline-target) — 프로젝트별 상한선 선택 가이드
+- [Create Baseline tools with the web-features package](https://web.dev/articles/baseline-tools-web-features) — 데이터셋 기반 도구 제작
+- [Baseline's evolution on MDN](https://developer.mozilla.org/en-US/blog/baseline-evolution-on-mdn/) — MDN 배지 도입 경위
+- [Node.js Modules: TypeScript](https://nodejs.org/api/typescript.html) — 타입 스트리핑 버전 이력
+- [Node.js 23.6.0 릴리스](https://nodejs.org/en/blog/release/v23.6.0) — 실험 플래그 제거 시점
+- [Node.js 24.11.0 'Krypton' LTS](https://nodejs.org/blog/release/v24.11.0) — 2025-10-28 LTS 전환
+- [import maps — web features explorer](https://web-platform-dx.github.io/web-features-explorer/features/import-maps/) — Widely available(2025-09-27) 확인
+- [Speculation Rules API — MDN](https://developer.mozilla.org/en-US/docs/Web/API/Speculation_Rules_API) — prefetch/prerender 안내
+- [speculation rules — web features explorer](https://web-platform-dx.github.io/web-features-explorer/features/speculation-rules/) — Limited availability와 브라우저별 지원

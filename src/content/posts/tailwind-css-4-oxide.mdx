@@ -1,0 +1,209 @@
+---
+title: 'Tailwind CSS 4.0 완벽 가이드 — Oxide 엔진과 CSS-first 설정의 시대'
+date: '2025-02-07'
+description: '2025년 1월 22일 공개된 Tailwind CSS 4.0의 핵심 변화를 정리했습니다. Rust로 재작성된 고성능 엔진과 @theme 기반 CSS-first 설정, 브라우저 요구 버전 상승, 자동 마이그레이션 도구까지 실전 관점에서 다루는 완전한 가이드.'
+tags: ['Tailwind CSS', 'CSS', '프론트엔드', '스타일링', 'Vite']
+---
+
+# Tailwind CSS 4.0 완벽 가이드 — Oxide 엔진과 CSS-first 설정의 시대
+
+## 개요
+
+2025년 1월 22일, Tailwind 팀이 [Tailwind CSS v4.0](https://tailwindcss.com/blog/tailwindcss-v4)를 정식 발표했습니다. v4.0은 단순한 기능 추가 릴리즈가 아니라 프레임워크 전체를 처음부터 다시 쓴 버전입니다. 빌드 파이프라인은 Rust로 재작성되었고, 설정은 JavaScript 파일에서 CSS 안으로 옮겨갔으며, 요구 브라우저 버전이 크게 올라갔습니다.
+
+저는 블로그와 몇 개의 사이드 프로젝트에서 v3를 계속 쓰고 있었는데, 발표 직후 마이그레이션을 진행하면서 문서를 정독하고 실제 동작을 확인한 내용을 이 글에 정리했습니다. 어떤 것이 바뀌었는지, 왜 바뀌었는지, 그리고 기존 프로젝트를 어떻게 옮기는지를 차례로 다룹니다.
+
+## 배경: 왜 v4가 필요했는가
+
+v3까지의 Tailwind는 PostCSS 플러그인이었습니다. 그래서 프로젝트에 도입하려면 최소한 이것들을 손봐야 했습니다.
+
+- `tailwindcss` 패키지를 PostCSS 플러그인으로 등록
+- `tailwind.config.js` 파일을 만들어 `content` 배열에 템플릿 파일 경로를 나열
+- `@tailwind base`, `@tailwind components`, `@tailwind utilities` 지시어를 CSS에 추가
+- `@import` 인라인 처리를 위해 `postcss-import`, 벤더 프리픽스를 위해 `autoprefixer`를 별도 설치
+
+이 구조는 잘 작동했지만 두 가지 아쉬움이 컸습니다. 첫째는 빌드 성능입니다. 클래스 후보를 찾기 위해 소스 파일 전체를 JavaScript로 스캔하다 보니 프로젝트가 커질수록 빌드 시간이 눈에 띄게 늘어났습니다. 둘째는 웹 플랫폼의 발전을 충분히 활용하지 못했다는 점입니다. cascade layers, `@property`, `color-mix()`처럼 최근 브라우저에 들어온 CSS 기능들은 v3의 아키텍처와는 어울리지 않았습니다. v4.0은 이 두 문제를 동시에 해결하는 방향으로 설계된, 말 그대로 "ground-up rewrite"입니다.
+
+## 새 엔진: Rust로 재작성된 빌드 파이프라인
+
+v4.0 발표문은 성능을 이렇게 요약합니다. **풀 빌드는 최대 5배 빠르고, 증분 빌드는 100배 이상 빨라서 마이크로초 단위로 측정된다**([Tailwind CSS v4.0 발표](https://tailwindcss.com/blog/tailwindcss-v4)). 공식 벤치마크(Catalyst 템플릿 기준)는 다음과 같습니다.
+
+```text
+                                         v3.4     v4.0     개선
+풀 빌드                                  378ms    100ms    3.78x
+증분 리빌드 (새 CSS 있음)                44ms     5ms      8.8x
+증분 리빌드 (새 CSS 없음)                35ms     192µs    182x
+```
+
+마지막 줄이 실제 개발 경험을 바꿉니다. 이미 쓴 적 있는 클래스만 사용하는 저장, 즉 대부분의 저장에서 빌드가 마이크로초 만에 끝납니다.
+
+엔진 구조는 [v4.0 알파 공개 포스트](https://tailwindcss.com/blog/tailwindcss-v4-alpha)에서 "Rust where it counts"라는 문장으로 정리되어 있습니다. 비용이 크고 병렬화가 쉬운 작업(소스 스캐닝, 클래스 후보 추출)은 Rust로 옮기고, 확장성이 중요한 코어는 TypeScript에 유지했습니다. 이 Rust 엔진은 저장소의 `crates/oxide` 디렉터리에 들어 있고, npm에는 `@tailwindcss/oxide` 네이티브 바인딩으로 공개되어 있어서 "Oxide 엔진"이라고 부릅니다. 여기에 PostCSS 대신 자체 CSS 파서(알파 발표 기준 파싱 성능 2배 이상)를 쓰고, [Lightning CSS](https://lightningcss.dev/)를 내장해 벤더 프리픽스와 문법 변환까지 처리합니다. 외부 의존성은 사실상 Lightning CSS 하나입니다.
+
+Vite 사용자라면 성능을 한 단계 더 끌어올릴 수 있습니다. PostCSS 플러그인 방식이 아니라 전용 Vite 플러그인으로 통합하면 실제 모듈 그래프만 스캔하므로 오탐도 누락도 없이 가장 빠릅니다.
+
+## 설치와 임포트가 한 줄로
+
+v4.0에서는 설정 없이 세 단계면 끝납니다.
+
+```bash
+npm i tailwindcss @tailwindcss/postcss
+```
+
+```js
+// postcss.config.mjs
+export default {
+  plugins: ["@tailwindcss/postcss"],
+};
+```
+
+```css
+/* app.css */
+@import "tailwindcss";
+```
+
+`@tailwind base/components/utilities` 지시어는 사라지고 일반 CSS `@import` 한 줄로 대체됐습니다. `postcss-import`와 `autoprefixer`는 Tailwind가 알아서 처리하므로 제거해도 됩니다. Vite를 쓴다면 PostCSS 설정 대신 전용 플러그인으로 연결합니다.
+
+```ts
+// vite.config.ts
+import { defineConfig } from "vite";
+import tailwindcss from "@tailwindcss/vite";
+
+export default defineConfig({
+  plugins: [tailwindcss()],
+});
+```
+
+CLI로 빌드하는 프로젝트라면 `@tailwindcss/cli` 패키지로 명령만 바꾸면 됩니다(`npx @tailwindcss/cli -i input.css -o output.css`). 이 부분은 [업그레이드 가이드](https://tailwindcss.com/docs/upgrade-guide)에 단계별로 정리되어 있습니다.
+
+## CSS-first 설정: tailwind.config.js에서 @theme로
+
+v4.0의 가장 큰 관점 변화는 설정을 CSS 안에서 한다("CSS-first configuration")는 것입니다. 색상, 폰트, 브레이크포인트 같은 디자인 토큰을 `@theme` 블록에 CSS 변수로 선언하면, Tailwind가 그 변수를 읽어 유틸리티 클래스를 자동으로 만들어줍니다.
+
+```css
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Pretendard", sans-serif;
+  --breakpoint-3xl: 1920px;
+  --color-brand-100: oklch(0.97 0.02 260);
+  --color-brand-500: oklch(0.6 0.18 262);
+  --color-brand-700: oklch(0.45 0.14 263);
+  --ease-snappy: cubic-bezier(0.2, 0, 0, 1);
+}
+```
+
+이 선언만으로 `font-display`, `3xl:text-center`, `bg-brand-500`, `ease-snappy` 같은 클래스가 바로 동작합니다. 변수 이름의 네임스페이스(`--color-*`, `--font-*`, `--breakpoint-*`, `--spacing` 등)가 어떤 유틸리티가 생성될지를 결정합니다. 자세한 규칙은 [theme variables 문서](https://tailwindcss.com/docs/theme)에 정리되어 있습니다.
+
+기존 JavaScript 설정과의 관계도 명확히 해두는 게 좋습니다. v4.0에서 `tailwind.config.js`는 **자동으로 감지되지 않습니다**. 레거시 설정을 그대로 쓰고 싶다면 CSS에서 `@config` 지시어로 명시적으로 로드해야 하고, `corePlugins`, `safelist`, `separator` 옵션은 지원되지 않습니다. 즉 JS 설정은 호환을 위한 경로일 뿐, 새로운 표준은 `@theme`입니다. 커스텀 클래스를 등록할 때도 v3의 `@layer utilities` 대신 `@utility` 지시어를 씁니다.
+
+```css
+@utility tab-4 {
+  tab-size: 4;
+}
+```
+
+`theme(colors.red.500)` 함수도 사실상 필요 없어졌습니다. 모든 토큰이 CSS 변수로 존재하므로 그냥 `var(--color-red-500)`을 쓰면 됩니다.
+
+## 모든 토큰이 CSS 변수로
+
+앞서 `@theme`에 선언한 값들은 컴파일 결과물의 `:root`에 일반 CSS 커스텀 프로퍼티로 그대로 들어갑니다. 덕분에 유틸리티 클래스 밖에서도, 심지어 런타임에서도 토큰에 접근할 수 있습니다.
+
+```js
+const styles = getComputedStyle(document.documentElement);
+const brand = styles.getPropertyValue("--color-brand-500");
+```
+
+인라인 스타일이나 `Motion` 같은 애니메이션 라이브러리에 값을 넘길 때도 변수를 그대로 전달할 수 있어서, 디자인 토큰이 CSS와 JavaScript 어디서든 하나의 출처를 갖게 됐습니다. v3의 `resolveConfig`로 JS 설정을 풀어 쓰던 패턴은 v4에서 제거되었고 이 변수 접근이 공식 대안입니다.
+
+## 콘텐츠 자동 감지와 @source
+
+v3에서 새 컴포넌트 폴더를 만들 때마다 `content` 배열을 고쳤다면, v4에서는 그럴 일이 almost 없습니다. Tailwind가 프로젝트를 스캔하면서 `.gitignore`에 있는 경로(`node_modules`, 빌드 산출물 등)와 바이너리 파일을 자동으로 제외하기 때문입니다. 명시적으로 포함해야 하는 소스가 있다면 `@source` 지시어를 씁니다.
+
+```css
+@import "tailwindcss";
+@source "../node_modules/@my-company/ui-lib";
+```
+
+## 동적 유틸리티와 표현력의 확장
+
+v4.0의 유틸리티는 정해진 스케일만 받지 않고 가능한 값을 동적으로 생성합니다.
+
+```html
+<!-- 어떤 숫자든 OK: grid-cols-15가 별도 설정 없이 동작 -->
+<div class="grid grid-cols-15">...</div>
+
+<!-- data-* 속성 변형도 정의 없이 -->
+<div data-current class="opacity-75 data-current:opacity-100">...</div>
+
+<!-- 간격 유틸리티는 --spacing 변수에서 계산: w-17, pr-29도 동작 -->
+<div class="mt-8 w-17">...</div>
+```
+
+간격 계산은 `calc(var(--spacing) * 17)` 형태로 풀리므로, `--spacing` 하나만 바꾸면 전체 간격 스케일이 따라옵니다. 여기에 더해 컨테이너 쿼리가 플러그인 없이 코어에 들어왔고(`@container`, `@sm:`, `@max-md:`), 기본 색상 팔레트는 oklch로 재디자인되어 P3 디스플레이에서 더 선명해졌습니다.
+
+## 브라우저 요구 버전 상승
+
+성능과 표현력의 대가입니다. [공식 호환성 문서](https://tailwindcss.com/docs/compatibility)에 따르면 v4.0의 코어 기능은 다음 브라우저를 기준으로 설계되고 테스트됩니다.
+
+- Chrome 111 (2023년 3월 출시)
+- Safari 16.4 (2023년 3월 출시)
+- Firefox 128 (2024년 7월 출시)
+
+`@property`로 커스텀 프로퍼티를 등록하거나 `color-mix()`로 불투명도를 조정하는 것이 프레임워크 코어에 들어가 있기 때문에, 이보다 오래된 브라우저에서는 v4.0이 동작하지 않습니다. 구형 브라우저를 지원해야 하는 프로젝트라면 공식 가이드대로 v3.4에 머무는 것이 정답입니다. 국내 프로젝트라면 사내 표준 브라우저 목록과 한 번 대조해볼 필요가 있습니다.
+
+## 실전 마이그레이션
+
+### 자동 업그레이드 도구
+
+v3에서 v4로 옮길 때는 공식 업그레이드 도구를 쓰는 것이 기본입니다.
+
+```bash
+git checkout -b upgrade-tailwind-v4
+npx @tailwindcss/upgrade
+```
+
+도구는 의존성 업데이트, `tailwind.config.js`를 CSS `@theme`으로 이전, 템플릿 파일의 변경된 클래스 이름 교체까지 대부분 자동으로 처리합니다. 단 Node.js 20 이상이 필요하고, 공식 문서도 새 브랜치에서 실행한 뒤 diff를 검토하고 브라우저로 확인하기를 권장합니다. 제 블로그는 설정이 단순해서 도구 한 번으로 끝났지만, 플러그인과 프리픽스를 많이 쓰는 프로젝트는 수작업 점검이 조금 필요했습니다.
+
+### 꼭 알아야 하는 브레이킹 체인지
+
+도구가 잡아주더라도 무엇이 바뀌는지는 알고 있어야 합니다. 자주 걸리는 것들입니다.
+
+```text
+v3                v4
+shadow-sm    ->   shadow-xs
+shadow       ->   shadow-sm
+rounded-sm   ->   rounded-xs
+rounded      ->   rounded-sm
+outline-none ->   outline-hidden
+ring         ->   ring-3
+```
+
+- `ring`의 기본 두께가 3px에서 1px로, 기본 색이 `blue-500`에서 `currentColor`로 바뀌었습니다.
+- `border` 계열의 기본 색상이 `gray-200`에서 `currentColor`로 바뀌었습니다. 색을 지정하지 않은 보더는 색을 명시해야 예전과 같아집니다.
+- `space-x-*`/`space-y-*`와 `divide-*`의 셀렉터가 성능 문제로 재설계되어, 인라인 요소나 자식 마진을 조정한 레이아웃에서는 결과가 달라질 수 있습니다. 문서는 `gap` 사용을 권장합니다.
+- `!important` 수식어가 클래스 앞에서 끝으로 이동했습니다(`!flex` -> `flex!`).
+
+### 마이그레이션 후 점검 목록
+
+- 포커스 링: `focus:ring`만 쓴 곳이 있다면 `focus:ring-3`과 색상 지정 여부 확인
+- 보더: 색상 없는 `border-*` 유틸리티 전수 조사
+- 그림자·라운드: 이름이 바뀐 유틸리티의 시각적 결과 비교 (스토리북이나 대표 화면)
+- `.gitignore`에 없는 외부 패키지에서 클래스를 스캔해야 한다면 `@source` 추가
+- 브라우저 지원 범위가 요구사항과 맞는지 최종 확인
+
+## 마치기
+
+v4.0을 쓰면서 체감이 가장 컸던 것은 역시 속도였습니다. 저장할 때마다 느껴지던 스타일 컴파일 지연이 사라지니 Tailwind가 더 이상 "기다리는 도구"가 아니었습니다. 그다음은 설정의 위치입니다. [Nextra로 블로그를 세팅할 때](/posts/nextra-complete-guide)도 `tailwind.config.js`를 몇 번 열어봤는데, 이제 토큰을 CSS에서 바로 선언하니 스타일 시스템이 한곳에 모이는 느낌입니다.
+
+브라우저 요구 버전이 올라간 것은 분명 트레이드오프지만, 최신 브라우저만 타깃으로 하는 사이드 프로젝트라면 지금이 넘어갈 좋은 시점입니다. 마이그레이션 도구가 생각보다 잘 만들어져 있으니, 가벼운 프로젝트부터 v3와 v4의 차이를 직접 비교해보시길 권합니다.
+
+## 레퍼런스
+
+- [Tailwind CSS v4.0 발표](https://tailwindcss.com/blog/tailwindcss-v4) — 2025년 1월 22일 공식 발표문, 성능 수치와 신기능 전체
+- [v4.0 알파 공개 포스트](https://tailwindcss.com/blog/tailwindcss-v4-alpha) — "Rust where it counts", 자체 파서, 통합 툴체인 설계 의도
+- [GitHub v4.0.0 릴리즈](https://github.com/tailwindlabs/tailwindcss/releases/tag/v4.0.0) — 2025-01-22 태그된 릴리즈 노트
+- [Upgrade guide](https://tailwindcss.com/docs/upgrade-guide) — v3에서 v4로의 전체 변경사항과 업그레이드 도구 사용법
+- [Compatibility 문서](https://tailwindcss.com/docs/compatibility) — 지원 브라우저 버전과 Sass/CSS 모듈 호환성
+- [Theme variables 문서](https://tailwindcss.com/docs/theme) — @theme 네임스페이스와 토큰 규칙
+- [Detecting classes in source files](https://tailwindcss.com/docs/detecting-classes-in-source-files) — 자동 콘텐츠 감지와 @source 지시어
+- [Lightning CSS](https://lightningcss.dev/) — v4가 벤더 프리픽스·문법 변환에 내장한 트랜스포머

@@ -1,0 +1,113 @@
+---
+title: 'Cursor vs GitHub Copilot vs Claude Code — 2025년 가을, 코딩 에이전트 3종 실전 비교'
+date: '2025-10-10'
+description: '코딩 에이전트 선택지는 Cursor, GitHub Copilot, Claude Code로 수렴한 2025년 가을. 에이전트 모드 변천, 공식 가격, 강약점과 제 실전 워크플로를 비교표로 정리한 분석 글입니다.'
+tags: ['AI', '코딩에이전트', 'Cursor', 'GitHub Copilot', 'Claude Code', '개발워크플로']
+---
+
+# Cursor vs GitHub Copilot vs Claude Code — 2025년 가을, 코딩 에이전트 3종 실전 비교
+
+## 문제 정의: 도구를 고르는 일도 일이 되었다
+
+1년 전만 해도 질문은 "에이전트, 써야 하나?"였다. 2025년 가을의 질문은 "어떤 조합으로 쓸까?"로 바뀌었다. 저는 올해 블로그와 사이드 프로젝트를 세 도구로 모두 돌려봤는데, 결론부터 말하면 **어느 하나로 끝내는 조합은 없었다.** 도구마다 컨텍스트를 모으는 방식과 승인을 받는 지점이 달랐다.
+
+이 글은 2025년 10월 현재를 기준으로 세 도구의 에이전트 모드, 가격, 강약점을 정리하고 제 분업 워크플로를 공유한다. **지금 이 시점의 3종 비교**다.
+
+## 각 도구의 에이전트 모드: 2025년의 발걸음
+
+### Cursor Agent — 에디터 안에서 완결되는 에이전트
+
+Cursor는 올해 [6월 1.0 릴리즈](https://cursor.com/changelog/1-0)를 기점으로 Agent를 편집기의 기본 작업 방식으로 통합했다. 이 버전에서 코드 리뷰 봇인 Bugbot, 세션을 거듭 참고하는 memories, 클라우드에서 돌다 알림을 주는 Background Agent가 모든 사용자에게 열렸다. **에이전트가 기본이고 에디터가 그 작업대**인 구성이다.
+
+### GitHub Copilot — 두 개의 에이전트
+
+Copilot의 에이전트는 두 갈래다. 먼저 VS Code 안의 agent mode. [올해 4월 VS Code 1.99 릴리즈](https://github.blog/changelog/2025-04-03-github-copilot-in-vs-code-march-release-v1-99/)와 함께 안정 채널에 들어왔고, 같은 주 [모든 VS Code 사용자에게 롤아웃](https://github.blog/news-insights/product-news/github-copilot-agent-mode-activated/)되며 MCP 지원도 함께 확대됐다.
+
+둘째는 클라우드의 coding agent다. [5월 공개 프리뷰로 발표](https://github.blog/news-insights/product-news/github-copilot-meet-the-new-coding-agent)된 이 에이전트는 이슈를 할당하면 GitHub Actions 위에서 스스로 브랜치를 만들고 PR을 제출한다. [6월에는 Copilot Pro 사용자에게도 열렸다](https://github.blog/changelog/2025-06-26-github-copilot-coding-agent-is-available-for-copilot-pro-users-in-public-preview/). "에디터 안 에이전트"와 "저장소 옆 에이전트"를 동시에 굴리는 것이 차별점이다.
+
+### Claude Code — 터미널에서 시작해 자율성을 넓혀가는 에이전트
+
+Claude Code는 [2월 Claude 3.7 Sonnet 발표와 함께 연구 프리뷰로 시작](https://www.anthropic.com/news/claude-3-7-sonnet)한 터미널 에이전트다. 에디터를 대체하지 않고, 셸 위에서 코드베이스를 읽고 파일을 고치고 명령을 실행한다. [9월에는 자율성 업데이트](https://www.anthropic.com/news/enabling-claude-code-to-work-more-autonomously)로 VS Code 확장과 Claude Code 2.0이 나왔고, Claude Agent SDK도 함께 공개됐다.
+
+## 가격 정책: 2025년 10월, 공식 기준으로
+
+세 도구 모두 올해 가격 구조를 크게 손봤다. 공지된 내용 기준으로만 정리했다.
+
+- **Cursor**: 무료 Hobby 외에는 [6월 말부터 Pro($20/월)가 API 사용량 기반](https://cursor.com/blog/june-2025-pricing)으로 바뀌었다. 월 $20 상당 사용량 포함, 초과분은 모델 API 단가로 과금. 6월에는 20배 사용량의 [Ultra($200/월)](https://cursor.com/blog/new-tier)가 추가됐고, [8월에는 Teams도 사용량 기반으로 전환](https://cursor.com/blog/aug-2025-pricing-teams)되어(9월 갱신부터) 사용자당 $20의 에이전트 사용량을 포함한다.
+- **GitHub Copilot**: [공식 문서 기준](https://docs.github.com/en/copilot/get-started/plans)으로 Free $0, Pro $10/월, Pro+ $39/월, Business 사용자당 $19/월, Enterprise 사용자당 $39/월이다. agent mode는 에디터 안에서, coding agent는 과금 대상 작업으로 돌아간다.
+- **Claude Code**: 별도 구독이 아니라 Claude 요금제에 포함된다. [공식 도움말 기준](https://www.anthropic.com/pricing) Pro $20/월, Max 5x $100/월, Max 20x $200/월. 에이전트 루프는 사용량을 빨리 소모해 Max가 사실상 본용도로 쓰인다.
+
+공통점은 "요청 횟수" 대신 **사용량 과금**으로 이동했다는 것이다. 에이전트 한 번의 작업이 소모하는 토큰이 자동완성과 차원이 다르기 때문이다.
+
+## 강약점 분해: 네 가지 축으로
+
+### 컨텍스트 처리
+
+Cursor는 코드베이스 인덱싱이 강하다. 상징 검색과 `@code` 참조로 넓은 저장소에서 관련 파일을 잘 가져온다. 다만 대화가 길어지면 컨텍스트 창 관리를 도구에 크게 의존하게 된다. Claude Code는 컨텍스트를 직접 설계하는 편이다. `CLAUDE.md`로 규약을 고정하고 필요한 파일만 읽게 하면 큰 저장소에서도 흐트러지지 않는다. Copilot은 열린 파일·셸 컨텍스트를 잘 활용하지만 반자동 수집에 가까워 통제 지점이 상대적으로 적다.
+
+### 터미널 접근
+
+Claude Code가 가장 자유롭다. 셸이 기본 인터페이스라 테스트 실행, 빌드, git 조작이 한 흐름에 있다. Cursor Agent도 터미널 명령을 실행하고 출력을 읽지만, 승인 단계를 거치며 에디터 안에서 돈다. Copilot agent mode는 VS Code 통합 터미널에서 명령을 실행하고, coding agent는 GitHub Actions 런타임으로 돌아간다. **로컬 환경을 다루는 일이라면 Claude Code, GitHub 워크플로 안에서라면 Copilot**이 자연스럽다.
+
+### 멀티파일 편집
+
+세 도구 모두 여러 파일을 한 번에 고친다. 차이는 편집 결과를 검수하는 경험이다. Cursor는 diff 뷰가 에디터와 붙어 있어 바로 다음 편집으로 이어가기 좋다. Claude Code는 변경을 나열하고 커밋 단위로 정리해 준다. Copilot coding agent의 산출물은 PR로 도착하므로, 편집 검수가 곧 코드 리뷰가 된다.
+
+### 검증
+
+에이전트의 실사용 가치는 스스로 확인하는 습관에서 갈린다. Claude Code는 테스트 실패를 읽고 수정을 반복하는 루프에 강하다. Cursor Agent도 재시도하지만 에디터 세션 안이라 무한 루프는 사람이 끊어야 할 때가 있다. Copilot coding agent는 CI 위에서 돌아 체크를 통과해야 PR을 남긴다는 구조적 장점이 있다. 어떤 도구든 **최종 검증 게이트는 사람과 CI**다.
+
+## 한눈에 보는 비교표
+
+| 구분 | Cursor | GitHub Copilot | Claude Code |
+| --- | --- | --- | --- |
+| 형태 | AI 네이티브 에디터 | VS Code/GitHub 통합 | 터미널 CLI(+VS Code 확장) |
+| 에이전트 모드 | Agent(1.0부터 기본) | agent mode + coding agent | 대화형 에이전트 루프 |
+| 컨텍스트 | 인덱싱·자동 수집 강점 | 열린 파일·셸 중심 | 직접 설계(CLAUDE.md) |
+| 터미널 | 에디터 안 승인제 | 로컬/Actions 분리 | 셸이 기본 인터페이스 |
+| 대표 가격(2025-10) | Pro $20/월, Ultra $200/월 | Pro $10/월, Business $19/인 | Pro $20/월, Max $100·$200/월 |
+| 잘 맞는 일 | 에디터 중심 구현 | GitHub 중심 위임·리뷰 | 탐색·계획·자동화 |
+
+## 제 워크플로: 계획은 Claude Code, 구현은 Cursor, 리뷰는 교차로
+
+세 도구를 한 일감에 순서대로 얹는 방식으로 쓰고 있다.
+
+1. **계획 — Claude Code.** 구현에 들어가기 전 저장소를 읽게 하고, 되물음을 시켜 명세의 구멍을 찾는다. 이 단계의 산출물은 코드가 아니라 계획 문서다. 구조는 대략 이렇다.
+```text
+# 기능 계획: 검색어 자동완성
+- 목표: 입력 중 300ms 후 후보 10개 노출
+- 제약: 기존 API 라우트 재사용, 신규 의존성 없음
+- 수정 예정 파일: src/hooks/useSuggest.ts (신규),
+  src/components/SearchBox.tsx, src/lib/api.ts
+- 확인 질문: 캐시 정책? 에러 시 폴백 UI?
+```
+
+2. **구현 — Cursor Agent.** 계획서를 넣고 멀티파일 편집을 시킨다. 에디터 안에서 diff를 보고 다음 지시로 이어가기 때문에 구현-미세조정 사이클이 가장 빠르다.
+3. **리뷰 — 교차 + 사람.** 구현을 Cursor가 했다면 리뷰는 다른 도구에 맡긴다. Claude Code로 `git diff`를 읽게 하거나 PR 리뷰 봇의 의견을 얹는다. 같은 도구가 자기 결과를 평가하면 맹점이 남는다.
+
+포인트는 **하나의 일감에서 생성 주체와 검증 주체를 다르게** 두는 것이다. 도구 교체 비용은 붙여넣기 몇 번이지만, 맹점을 하나 더 제거해 준다.
+
+## 체크리스트: 무엇부터 시작할까
+
+- 에디터에서 보내는 시간이 길고 UI 디테일 구현이 많다 → Cursor부터
+- 팀의 중심이 GitHub이고 이슈→PR 파이프라인이 정리되어 있다 → Copilot coding agent부터
+- CLI 기반 자동화, 대규모 리팩터링, 계획 수립이 주된 작업이다 → Claude Code부터
+- 여럿을 섞는다면 프로젝트 규약 파일(CLAUDE.md 등)을 먼저 쓴다. 올여름 공식화된 [AGENTS.md](https://agents.md) 규약을 참고해 지침을 하나로 묶는 것도 방법이다.
+- 어떤 조합이든 사람의 승인 지점(커밋·머지·배포)은 명시적으로 남긴다.
+
+## 시사점: 도구는 바뀌어도 원칙은 남는다
+
+3종 비교를 하고 보니 도구의 차이보다 뚜렷한 것은 **일의 분리**였다. 계획, 구현, 리뷰를 하나의 에이전트가 다 떠안을수록 검증이 약해지고, 역할을 나눌수록 워크플로가 도구 교체에도 살아남았다. 올해 세 도구는 "에이전트 모드 갖추기 + 사용량 과금 전환"이라는 같은 방향으로 움직였고, 이 흐름은 내년에도 이어질 것이다.
+
+## 레퍼런스
+
+- [Cursor 1.0 changelog](https://cursor.com/changelog/1-0) — 2025년 6월 4일, Agent 통합·Bugbot·Background Agent 전면 공개
+- [Clarifying our pricing | Cursor Blog](https://cursor.com/blog/june-2025-pricing) — Pro $20 사용량 기반 전환 안내
+- [Updates to Ultra and Pro | Cursor Blog](https://cursor.com/blog/new-tier) — Ultra $200/월 티어 추가
+- [GitHub Copilot in VS Code March release (v1.99) | GitHub Changelog](https://github.blog/changelog/2025-04-03-github-copilot-in-vs-code-march-release-v1-99/) — agent mode의 VS Code 안정 채널 포함
+- [GitHub Copilot: Agent mode and MCP support rolling out to all VS Code users | GitHub Blog](https://github.blog/news-insights/product-news/github-copilot-agent-mode-activated/) — 전체 사용자 대상 agent mode 롤아웃
+- [GitHub Copilot: Meet the new coding agent | GitHub Blog](https://github.blog/news-insights/product-news/github-copilot-meet-the-new-coding-agent) — 이슈 할당형 클라우드 에이전트 공개 프리뷰 발표
+- [Plans for GitHub Copilot | GitHub Docs](https://docs.github.com/en/copilot/get-started/plans) — Copilot 요금제 공식 문서
+- [Claude 3.7 Sonnet and Claude Code | Anthropic](https://www.anthropic.com/news/claude-3-7-sonnet) — Claude Code 연구 프리뷰 출발점
+- [Enabling Claude Code to work more autonomously | Anthropic](https://www.anthropic.com/news/enabling-claude-code-to-work-more-autonomously) — VS Code 확장·2.0·Agent SDK 발표
+- [Claude 요금제 | Anthropic](https://www.anthropic.com/pricing) — Pro/Max 요금제 공식 안내

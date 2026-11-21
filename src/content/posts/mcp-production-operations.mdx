@@ -1,0 +1,103 @@
+---
+title: 'MCP 운영 가이드 — 기초 다음 단계: 인증, 보안, 게이트웨이'
+date: '2026-06-13'
+description: 'MCP 서버를 취미에서 업무용으로 올리는 단계에서 필요한 OAuth 2.1 인증, 프롬프트 인젝션·툴 poisoning 대응, 게이트웨이와 감사 로그 설계를 정리했습니다. 운영·보안 관점의 플레이북입니다.'
+tags: ['MCP', '보안', 'OAuth', '에이전트', '운영']
+---
+
+# MCP 운영 가이드 — 기초 다음 단계: 인증, 보안, 게이트웨이
+
+로컬에서 stdio로 도는 MCP 서버 하나로 시작하면 "이거 되네"까진 빠릅니다. 문제는 그 다음입니다. 팀 전체가 쓰게 만드는 순간 누가 어떤 서버에 접속하는지(인증), 서버가 믿을 만한지(보안), 무엇이 바뀌었는지(운영)라는 세 질문에 답해야 합니다. [MCP 기초 정리](/posts/model-context-protocol-guide)와 [장애 대응 플레이북](/posts/frontend-ai-mcp-incident-triage-playbook)은 읽었다고 가정하고, 이 글은 그다음 단계인 "운영·보안"만 다룹니다.
+
+## 문제 정의
+
+사내 MCP 도입이 흔히 멈추는 지점은 셋입니다.
+
+- **누구나 아무 서버나 붙인다**: 개인이 만든 서버가 사내 문서 전체를 읽는 토큰을 들고 있는 상태
+- **서버가 하는 말을 통제 못 한다**: 툴 description이나 리소스 내용에 악의적 지시가 섞여 있어도 모델은 그대로 읽는다
+- **바뀐 걸 아무도 모른다**: 어제 승인했던 툴이 오늘 다른 짓을 해도 알람이 없다
+
+셋 모두 프로토콜이 아니라 운영 설계의 문제입니다. 아래 순서로 해법을 정리합니다.
+
+## 인증 — 스펙의 OAuth 2.1
+
+MCP는 2025-06-18 버전 스펙부터 [Authorization 규격](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization)에서 HTTP 전송 기반 인증을 OAuth 2.1로 정의했습니다. 로컬 stdio 서버에는 해당 없지만, 원격(스트리밍 HTTP) 서버를 운영한다면 이 규격을 따르는 게 정석입니다.
+
+구조에서 자주 혼동하는 부분부터 짚습니다. MCP 서버는 OAuth에서 **리소스 서버(Resource Server)** 역할입니다. 액세스 토큰을 발급하는 인가 서버와, 토큰을 검증하며 실제 기능을 제공하는 MCP 서버가 분리될 수 있고, 스펙은 리소스 서버가 자신을 식별할 수단(예: `resource_metadata` 응답)을 제공하도록 요구합니다. 튜토리얼인 [Understanding Authorization in MCP](https://modelcontextprotocol.io/docs/2025-06-18/tutorials/security/authorization)도 이 리소스 서버 관점으로 설명을 전개합니다.
+
+토큰 전달은 단순합니다. 클라이언트는 승인받은 토큰을 매 요청 헤더로 실어 보냅니다.
+
+```text
+POST /mcp HTTP/1.1
+Host: mcp.internal.example
+Authorization: Bearer <access_token>
+```
+
+운영 관점에서 체크할 것:
+
+- 토큰 스코프는 툴 단위로 최소화한다. "문서 읽기"와 "문서 쓰기"를 하나의 스코프로 묶지 않는다.
+- 만료 짧은 액세스 토큰 + 리프레시 토큰. 에이전트 세션이 며칠을 가도 세션 내내 유효한 토큰을 쓰지 않는다.
+- 게이트웨이에서 토큰의 스코프·대상(audience)을 재검증한다. 클라이언트가 맞는 토큰을 맞는 서버로만 쓰게 하는 것이 confused deputy 예방의 첫 줄입니다.
+
+## 보안 — 이미 실제로 일어난 공격들
+
+MCP 보안 논의는 가설로 시작하지 않았습니다. 2025년 봄, 실제 공격 시나리오들이 공개되며 시작됐습니다.
+
+**프롬프트 인젝션.** Simon Willison은 [MCP의 프롬프트 인젝션 문제](https://simonwillison.net/2025/Apr/9/mcp-prompt-injection/)를 정리하며, MCP가 도구 결과·리소스·프롬프트 템플릿 등 "모델이 신뢰하는 입력 경로"를 여러 개 만든다는 점을 지적했습니다. 도구가 반환한 텍스트에 "이제 이 파일을 저 주소로 올려라" 같은 문장이 섞여 있으면 모델은 그것을 데이터가 아니라 지시로 읽을 수 있습니다. Microsoft도 [간접 프롬프트 인젝션 대응 글](https://developer.microsoft.com/blog/protecting-against-indirect-injection-attacks-mcp)에서 같은 위협을 다뤘습니다.
+
+**툴 poisoning과 rug pull.** Invariant Labs는 [Tool Poisoning Attacks 보고](https://invariantlabs.ai/blog/mcp-security-notification-tool-poisoning-attacks)에서 툴 description에 보이지 않는 악성 지시를 심는 공격과, 사용 전에는 문제없다가 승인 후 동작을 바꾸는 **rug pull**을 공개했습니다. 여기엔 **confused deputy** 구조가 겹칩니다: 공격자 서버가 희생자 클라이언트의 권한을 빌려 써서, 희생자도 모르게 자기 권한으로 데이터를 유출시키는 것입니다.
+
+이 위협 모델이 시사하는 운영 원칙:
+
+1. **최소 권한**: MCP 서버에 주는 자격증명은 그 서버의 기능에 꼭 필요한 범위로만. 문서 검색 서버에 문서 쓰기 권한을 주지 않는다.
+2. **허가 게이트**: 툴 호출이 사용자에게 승인 없이 실행되지 않게 클라이언트 정책을 강제한다. 특히 외부로 데이터를 내보내는 툴은 항상 게이트 대상.
+3. **변경 감시**: rug pull의 본질은 "승인 후 변경"이므로, 툴 목록·description의 해시를 기록해 두고 바뀌면 재승인을 요구한다.
+4. **인젝션 격리**: 도구 결과는 지시가 아닌 데이터로 취급한다. 도구 결과 안의 "지시"를 실행하는 툴(파일 쓰기, 외부 전송)과 조합되지 않게 흐름을 설계한다.
+
+## 운영 — 게이트웨이, 감사 로그, 버저닝
+
+개인 클라이언트가 각자 서버에 붙는 구조는 통제 지점이 없습니다. 그래서 다음 단계는 **사내 MCP 게이트웨이/집계**입니다.
+
+```text
+에이전트 클라이언트 ──▶ MCP 게이트웨이 (인증 종단, 감시, 로깅)
+                          ├─ 사내 문서 검색 서버
+                          ├─ 이슈 트래커 서버
+                          └─ 허가된 외부 서버 (프록시)
+```
+
+게이트웨이가 가져야 할 기능 체크리스트:
+
+- **인증 종단**: 클라이언트는 게이트웨이에만 OAuth로 인증한다. 개별 서버 자격증명이 개인 손에 흩어지지 않게 한다.
+- **허가 목록(allowlist)**: 붙일 수 있는 서버·툴 목록을 코드로 관리하고, 목록 밖은 차단한다. 신규 툴은 해시와 함께 리뷰 후 등록.
+- **감사 로그**: 누가/어떤 에이전트가/어떤 툴을/어떤 인자로 호출했는지 구조화해 남긴다. 인자에 문서 본문 통째로를 남기지 말고 크기 상한과 해시로 요약한다.
+- **툴 버저닝**: 서버 쪽에서 툴 이름이나 스키마를 바꿀 때는 게이트웨이에서 이전 버전을 병행 제공하고 클라이언트 마이그레이션 기간을 둔다. 파괴적 변경은 스모크 테스트(툴 목록·스키마 dump)로 감지한다.
+
+감사 로그는 장애 대응 때도 쓰입니다만, 그 절차는 [MCP 사고 대응 플레이북](/posts/frontend-ai-mcp-incident-triage-playbook)에 이미 정리했으니 여기서는 생략합니다. 공급망(서버 패키지 자체의 신뢰) 관점은 [공급망 사고 플레이북](/posts/frontend-ai-supply-chain-incident-playbook)과 같은 프레임으로 볼 수 있습니다.
+
+## 원인으로 돌아가는 체크리스트
+
+MCP 운영을 점검할 때 쓰는 목록입니다.
+
+- [ ] 원격 MCP 서버는 스펙의 OAuth 2.1 인증을 쓰는가 (직접 만든 토큰 헤더가 아님)
+- [ ] 액세스 토큰은 짧게, 스코프는 툴 단위로 쪼개져 있는가
+- [ ] 모든 툴 호출이 사용자 승인 게이트를 지나는가, 외부 전송 계열은 특히
+- [ ] 툴 description·스키마 해시를 기록해서 변경 시 재승인되는가
+- [ ] 도구 결과를 지시로 실행하는 경로가 분리·차단되어 있는가
+- [ ] 게이트웨이 경유 허가 목록이 코드 리뷰로 관리되는가
+- [ ] 감사 로그에 호출 주체·툴·인자 요약이 남고 보존 기간이 정해져 있는가
+- [ ] 툴 파괴적 변경 전파에 스모크 테스트와 병행 제공 기간이 있는가
+
+## 시사점
+
+MCP의 가치는 "무엇이든 연결할 수 있다"가 아니라 "연결을 통제된 상태로 만들 수 있다"에 있습니다. 인증은 스펙이 이미 OAuth 2.1으로 정리해 줬고, 공격 사례는 인젝션·poisoning·rug pull로 구체적으로 알려져 있으니 방어할 지점도 명확합니다. 남은 건 조직의 결정입니다: 개인 판단에 맡길지, 게이트웨이와 게이트로 통제할지. 취미 프로젝트는 전자로 충분하지만, 사내 문서와 권한이 걸린 순간부터는 후자여야 합니다.
+
+## 레퍼런스
+
+- [MCP Specification 2025-06-18 — Authorization](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization) — OAuth 2.1 기반 인증 규격의 원문
+- [Understanding Authorization in MCP](https://modelcontextprotocol.io/docs/2025-06-18/tutorials/security/authorization) — 리소스 서버 관점의 인증 구현 튜토리얼
+- [Model Context Protocol has prompt injection security problems — Simon Willison](https://simonwillison.net/2025/Apr/9/mcp-prompt-injection/) — MCP의 프롬프트 인젝션 입력 경로 분석 (2025-04-09)
+- [MCP Security Notification: Tool Poisoning Attacks — Invariant Labs](https://invariantlabs.ai/blog/mcp-security-notification-tool-poisoning-attacks) — 툴 poisoning·rug pull 공격 시연 보고 (2025-04-01)
+- [Protecting against indirect prompt injection attacks in MCP — Microsoft](https://developer.microsoft.com/blog/protecting-against-indirect-injection-attacks-mcp) — 간접 인젝션 대응 가이드
+- [MCP 기초 가이드](/posts/model-context-protocol-guide) — 본 블로그의 MCP 개요 글 (2026-01-22)
+- [MCP 사고 대응 플레이북](/posts/frontend-ai-mcp-incident-triage-playbook) — MCP 연계 장애 대응 절차 (2026-04-06)
+- [공급망 사고 플레이북](/posts/frontend-ai-supply-chain-incident-playbook) — 패키지 신뢰성 사고 대응 (2026-04-04)

@@ -1,0 +1,269 @@
+---
+title: '2025년에 쓰는 현대 CSS — Baseline부터 앵커 포지셔닝까지'
+date: '2025-09-12'
+description: 'CSS는 컴포넌트 반응형, 툴팁 배치, 스크롤 애니메이션을 JavaScript 없이 처리할 수 있게 성장했습니다. Baseline 지원 판단 기준을 소개하고 :has(), 컨테이너 쿼리, @layer, 앵커 포지셔닝 등을 예시 코드로 정리한 가이드입니다.'
+tags: ['CSS', '프론트엔드', 'Baseline', '컨테이너쿼리', 'Modern CSS']
+---
+
+# 2025년에 쓰는 현대 CSS — Baseline부터 앵커 포지셔닝까지
+
+"그 기능, IE 때문에 못 쓰는 거 아니었어요?"라는 질문을 아직도 받지만, 2025년의 CSS는 다른 언어처럼 느껴질 만큼 바뀌었다. 부모 요소를 선택하고, 컨테이너 크기에 반응하고, 툴팁을 JavaScript 없이 붙이고, 스크롤에 맞춰 애니메이션이 흐른다.
+
+이 글은 실무에서 바로 쓸 수 있는 기능들을 2025년 9월 현재 기준으로 정리한다. 먼저 "써도 되는지"를 판단하는 기준부터 세우고 시작하겠다.
+
+## 배경: 왜 지금 다시 CSS인가
+
+요소가 뷰포트에 들어왔는지 `IntersectionObserver`로 감지하는 코드, 툴팁 위치를 계산하는 `getBoundingClientRect()` 코드 — 프론트엔드에서 반복적으로 마주하던 코드다. 이런 코드의 상당 부분이 최근 몇 년 새 CSS 자체로 흡수됐다. 브라우저 4개 엔진이 기능을 거의 동시에 맞춰오면서 "한 브라우저에서만 되는 CSS"라는 불신도 옛말이 되어가고 있다. 이 변화의 중심에 [Baseline](https://web.dev/baseline)이라는 지원 판단 기준이 있다.
+
+## 핵심 개념: Baseline, "써도 되는 CSS"의 기준
+
+Baseline은 web.dev에서 운영하는 웹 플랫폼 기능 지원 표시 체계다. 기능마다 두 단계로 상태를 나타낸다.
+
+- **Newly available**: 4개 엔진(Chrome, Edge, Firefox, Safari) 최신 안정 버전에서 모두 동작하기 시작한 시점
+- **Widely available**: Newly available 시점으로부터 30개월이 지나 대부분 사용자 브라우저에서 쓸 수 있다고 보는 시점
+
+이 정의는 [Baseline 2023 발표 글](https://web.dev/blog/baseline2023)에서 공식화됐고, 지금은 MDN과 caniuse에도 같은 표시가 붙는다. 이제 "이 기능 써도 되나요?"라는 질문에 "Baseline 배지와 타깃 브라우저 정책을 비교해 보세요"라고 답할 수 있게 됐다.
+
+이 기준으로 2025년 9월 현재 쓸 수 있는 기능들을 하나씩 보자. 앞의 넷은 안심하고 쓰는 기능, 뒤의 셋은 지원 현황을 알고 써야 하는 기능이다.
+
+## 부모와 상황을 선택하는 :has()
+
+`:has()`는 "관계 선택자(relational pseudo-class)"다. CSS의 오랜 한계였던 **부모 선택**과 **이전 형제 선택**을 가능하게 한다. Chrome과 Safari는 2022년부터 지원했고, 마지막까지 남았던 Firefox가 [Firefox 121(2023년 12월 출시)](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/121)에서 지원하면서 모든 메이저 브라우저에서 쓸 수 있게 됐다. [Baseline 2023](https://web.dev/blog/baseline2023)에 함께 등록된 기능이기도 하다.
+
+실전에서 가장 달라지는 부분은 폼과 카드 선택 UI다.
+
+```css
+/* 1) 필수 입력에 문제가 있으면 경고 표시 — 부모 선택 */
+.signup-form:has(input:invalid) .form-warning {
+  display: block;
+}
+
+/* 2) 체크된 카드만 강조 — 상태에 따른 부모 스타일링 */
+.plan-card:has(input:checked) {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--brand);
+}
+
+/* 3) 활성 탭 바로 앞의 탭 밑줄 제거 — 이전 형제 선택 */
+.tab:has(+ .tab[aria-selected='true']) {
+  border-bottom-color: transparent;
+}
+```
+
+이제 상태가 DOM에 있고 CSS가 그것을 읽는다. `:has()` 내부에 복잡한 선택자를 넣는 무거운 사용만 피하면 실무에서 성능 문제는 드물다.
+
+## 뷰포트가 아닌 컨테이너 기준 — @container와 cqw 단위
+
+미디어 쿼리의 한계는 "기준이 언제나 뷰포트"라는 점이었다. 그래서 같은 카드 컴포넌트가 사이드바에서는 1단, 메인에서는 2단으로 보이려면 페이지마다 다른 클래스를 덧붙여야 했다.
+
+컨테이너 쿼리는 이 기준을 컴포넌트를 감싸는 컨테이너로 옮긴다. 2023년에 4개 엔진 모두에 들어왔고, [2025년 8월 Baseline Widely available로 승격됐다](https://web.dev/blog/baseline-digest-aug-2025). 이 글을 쓰는 시점 기준으로 "이제 마음 놓고 쓰는" 단계다.
+
+```css
+/* 컨테이너 선언 */
+.card-shell {
+  container-type: inline-size;
+  container-name: card;
+}
+
+/* 컨테이너 너비에 반응 — 어느 페이지에 놓였는지와 무관 */
+@container card (min-width: 480px) {
+  .card {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 1rem;
+  }
+}
+
+/* cqw: 컨테이너 너비의 100분율 */
+.card__title {
+  font-size: clamp(1.05rem, 6cqw, 1.6rem);
+}
+```
+
+`cqw`(container query width)는 컨테이너 너비의 1%다. 카드가 사이드바의 300px 안에 있든 메인의 800px 안에 있든, 컴포넌트가 스스로 자기 크기에 맞는 타이포 크기를 갖는다. 반응형 컴포넌트를 만들 때 미디어 쿼리보다 자연스러운 모델이며, 문법은 [web.dev 컨테이너 쿼리 가이드](https://web.dev/learn/css/container-queries)에 잘 정리되어 있다.
+
+## 캐스케이드에 층을 만드는 @layer
+
+CSS가 크면 명시도(specificity) 전쟁이 시작된다. 리셋, 디자인 시스템, 페이지 오버라이드가 뒤섞이면 `!important`가 번식한다.
+
+`@layer`는 캐스케이드에 명시적인 우선순위 층을 만든다. 먼저 선언한 레이어가 항상 나중 레이어에게 진다. Chrome 99를 시작으로 2022년 세 엔진이 거의 동시에 지원했고([New in Chrome 99](https://developer.chrome.com/blog/new-in-chrome-99)), [MDN @layer 문서](https://developer.mozilla.org/en-US/docs/Web/CSS/@layer) 기준으로 오래전에 Baseline Widely available 상태다.
+
+```css
+/* 레이어 순서 선언 — 이 한 줄이 우선순위의 전부 */
+@layer reset, tokens, components, utilities;
+
+@layer reset {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+  }
+}
+
+@layer components {
+  .btn {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    background: var(--color-brand);
+  }
+}
+
+@layer utilities {
+  /* 명시도는 낮아도 utilities 레이어가 더 위이므로 이긴다 */
+  .btn--full {
+    width: 100%;
+  }
+}
+```
+
+핵심은 명시도 숫자 대신 **레이어 순서**가 이길 여부를 결정한다는 점이다. 유틸리티 CSS와 디자인 시스템 CSS를 섞을 때 특히 유용하다. 순서만 합의하면 `!important` 없이도 규칙이 성립한다.
+
+## JavaScript 없이 툴팁 붙이기 — CSS 앵커 포지셔닝
+
+툴팁, 드롭다운, 팝오버 배치는 오랫동안 JavaScript의 영역이었다. 앵커 포지셔닝은 요소를 기준(anchor)에 묶고, 공간이 부족하면 다른 위치를 시도하는 배치 로직을 CSS로 가져온다.
+
+[Chrome 125(2024년 5월)](https://developer.chrome.com/blog/anchor-positioning-api)에서 처음 안정 버전으로 들어왔다. 다만 2025년 9월 현재 **지원 현황을 알고 써야 하는 기능**이다. Chrome과 Edge는 쓸 수 있지만 Firefox는 아직 실험 플래그 단계로 기본 활성화되지 않았고, Safari도 지원이 진행 중이다. 즉 크로스 브라우저 대상 서비스에는 폴리필을 함께 검토해야 한다.
+
+```css
+/* 기준이 되는 버튼에 앵커 이름 지정 */
+.menu-trigger {
+  anchor-name: --menu-trigger;
+}
+
+/* 메뉴를 앵커에 묶기 */
+.menu {
+  position: fixed;
+  position-anchor: --menu-trigger;
+
+  /* 앵커의 아래 가장자리에 붙이고 수평 중앙 정렬 */
+  top: anchor(bottom);
+  justify-self: anchor-center;
+  margin-top: 8px;
+
+  /* 공간이 부족하면 시도할 대체 위치 */
+  position-try-fallbacks: flip-block, flip-inline;
+}
+```
+
+`anchor(bottom)` 같은 함수로 앵커의 어느 변에 놓을지 정하고, `position-try-fallbacks`로 대체 배치를 지정한다. 문법은 스펙 논의 중 조정을 거쳤으니 도입 시 [Chrome 개발자 문서](https://developer.chrome.com/blog/anchor-positioning-api)에서 최신 형태를 확인하자.
+
+## 스크롤에 반응하는 애니메이션 — animation-timeline
+
+읽기 진행률 바, 스크롤에 따라 나타나는 카드 같은 효과는 지금까지 스크롤 이벤트 + rAF 조합으로 구현했다. 스크롤 기반 애니메이션(scroll-driven animations)은 이 "스크롤 위치 → 애니메이션 진행도" 연결을 브라우저에 맡긴다.
+
+[Chrome 115(2023년)](https://developer.chrome.com/docs/css-ui/scroll-driven-animations)에서 들어왔고, WebKit도 [올해 6월 가이드를 공개하며](https://webkit.org/blog/17101/a-guide-to-scroll-driven-animations-with-just-css) 지원을 준비 중이다. Firefox는 아직 실험 단계다. 메인 스레드가 아닌 컴포지터에서 처리되어 스크롤 성능이 좋다는 것이 큰 장점이다.
+
+```css
+/* 1) 읽기 진행률 바: 문서 스크롤에 선형으로 연결 */
+@keyframes grow-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.reading-bar {
+  position: fixed;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 3px;
+  transform-origin: left;
+  background: var(--color-brand);
+  animation: grow-x linear;
+  animation-timeline: scroll(root block);
+}
+
+/* 2) 카드 등장: 요소가 뷰포트를 지나는 구간에 연결 */
+@keyframes reveal {
+  from { opacity: 0; translate: 0 24px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+.card {
+  animation: reveal ease both;
+  animation-timeline: view();
+  animation-range: entry 0% entry 60%;
+}
+```
+
+`scroll()`은 스크롤 컨테이너의 진행도에, `view()`는 요소가 뷰포트를 지나는 위치에 타임라인을 연결하고, `animation-range`로 등장 시점을 조절한다. 핸들러가 사라져 코드는 짧아지고, 컴포시터 처리로 버벅임도 줄어든다.
+
+## 색과 타이포의 마무리 도구 — color-mix()와 text-wrap: balance
+
+### 색 파생은 color-mix()로
+
+다크 모드와 브랜드 색 상수가 늘어나면서 파생 색이 필요해졌다. `color-mix()`는 두 색을 지정한 색공간에서 섞는 함수로, 2023년부터 메이저 브라우저 모두에서 지원한다([New CSS color spaces and functions in all major engines](https://web.dev/blog/color-spaces-and-functions)).
+
+```css
+:root {
+  --color-brand: oklch(0.62 0.17 255);
+}
+
+.button {
+  background: var(--color-brand);
+}
+
+.button:hover {
+  /* 브랜드 색에 흰색 8% 섞기 — Sass 믹스 함수 대체 */
+  background: color-mix(in oklab, var(--color-brand) 92%, white);
+}
+
+.badge {
+  /* 배경은 옅게, 텍스트는 진하게 — 변수 하나에서 파생 */
+  background: color-mix(in srgb, var(--color-brand) 15%, transparent);
+  color: color-mix(in oklab, var(--color-brand) 75%, black);
+}
+```
+
+색 공간을 `oklab`로 지정하면 밝기 지각이 균일해져 hover 변형이 자연스럽다. 파생 색을 토큰 하나에서 계산하니 다크 모드 전환에도 변수만 바꾸면 된다.
+
+### 제목 줄바꿈은 text-wrap: balance로
+
+제목이 두 줄로 넘어갈 때 마지막 줄에 한 단어만 남는 현상은 오래된 타이포그래피 문제다. `text-wrap: balance`는 줄 길이를 비슷하게 맞춰 줄바꿈하도록 한다. Chrome 114, Firefox 121에 이어 Safari 17.4까지 지원하며 [지원 현황은 Baseline Newly available로 기록되어 있다](https://web-platform-dx.github.io/web-features-explorer/features/text-wrap-balance/).
+
+```css
+.post__title {
+  /* 두 줄 이하의 짧은 텍스트에 효과적 */
+  text-wrap: balance;
+  max-width: 28ch;
+}
+```
+
+[Chrome 개발자 문서](https://developer.chrome.com/docs/css-ui/css-text-wrap-balance)도 권장하듯 제목처럼 짧은 텍스트에 쓰는 기능이다.
+
+## 실전 도입 전략: 점진적 향상으로 쌓기
+
+기능별 지원 상태가 다르니 도입 순서를 정리하면 이렇다.
+
+1. **바로 쓴다**: `:has()`, 컨테이너 쿼리, `@layer`, `color-mix()` — Baseline에 들어와 있고 폴백 부담이 적다.
+2. **향상으로 쓴다**: `text-wrap: balance`, 스크롤 기반 애니메이션 — 미지원 브라우저에서는 기본 동작으로 돌아간다.
+3. **지원 확인 후 쓴다**: 앵커 포지셔닝 — Chrome/Edge 위주 서비스면 바로, 크로스 브라우저라면 폴리필과 함께 간다.
+
+향상형 기능은 `@supports (animation-timeline: scroll())` 블록으로 감싸면 "이 기능이 있을 때만 향상시킨다"는 의도를 코드에 남길 수 있다. 새 기능을 검토할 때는 문서의 Baseline 배지를 먼저 보고 브라우저 지원 정책과 비교하는 습관을 들이자. 이 판단 절차 자체가 이제 프론트엔드 개발의 기본기가 됐다.
+
+## 정리
+
+2025년의 CSS는 "꾸미는 스타일시트"에서 "UI 상태와 배치를 다루는 선언적 언어"로 자리를 옮기고 있다. 핵심만 요약하면 다음과 같다.
+
+- Baseline은 Newly available(4엔진 지원 시작)과 Widely available(30개월 경과)으로 쓸 수 있는지를 판단해 준다.
+- `:has()`는 부모·이전 형제 선택을, 컨테이너 쿼리는 컴포넌트 단위 반응형을 가능하게 한다.
+- `@layer`는 명시도 대신 레이어 순서로 캐스케이드를 정리한다.
+- 앵커 포지셔닝과 스크롤 기반 애니메이션은 지원 현황을 확인하며 도입한다.
+- `color-mix()`와 `text-wrap: balance`는 색 파생과 타이포그래피의 마무리 도구다.
+
+JavaScript로 짜던 코드가 CSS 한 덩어리로 바뀌는 경험을 몇 번 해보면 CSS에 대한 편견은 저절로 사라진다. 발판은 브라우저가 다 만들어 뒀다. 남은 일은 익히는 일이다.
+
+## 레퍼런스
+
+- [Baseline | web.dev](https://web.dev/baseline) — 웹 플랫폼 기능 지원 상태를 알려주는 Baseline 체계 소개
+- [Baseline 2023 | web.dev blog](https://web.dev/blog/baseline2023) — Baseline 새 정의(Newly/Widely available)와 2023년 등록 기능 정리
+- [Firefox 121 release notes | MDN](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/121) — Firefox 121에 :has()가 들어온 릴리스 노트
+- [Container queries | web.dev Learn CSS](https://web.dev/learn/css/container-queries) — 컨테이너 쿼리와 cqw 단위 학습 가이드
+- [CSS container queries are now Baseline Widely available | web.dev blog](https://web.dev/blog/baseline-digest-aug-2025) — 2025년 8월 컨테이너 쿼리 Widely available 승격 발표
+- [@layer | MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/@layer) — 캐스케이드 레이어 문법과 우선순위 규칙
+- [Introducing the CSS anchor positioning API | Chrome for Developers](https://developer.chrome.com/blog/anchor-positioning-api) — Chrome 125 앵커 포지셔닝 발표와 문법 안내
+- [Animate elements on scroll with scroll-driven animations | Chrome for Developers](https://developer.chrome.com/docs/css-ui/scroll-driven-animations) — scroll()/view() 타임라인 공식 가이드
+- [A guide to scroll-driven animations with just CSS | WebKit Blog](https://webkit.org/blog/17101/a-guide-to-scroll-driven-animations-with-just-css) — WebKit의 스크롤 기반 애니메이션 지원 가이드(2025년 6월)
+- [New CSS color spaces and functions in all major engines | web.dev blog](https://web.dev/blog/color-spaces-and-functions) — color-mix() 등 색 기능의 전 엔진 지원 발표
+- [text-wrap: balance | Web platform features explorer](https://web-platform-dx.github.io/web-features-explorer/features/text-wrap-balance/) — text-wrap: balance의 Baseline 지원 기록
