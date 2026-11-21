@@ -3,5 +3,15 @@
   "framework": "astro",
   "buildCommand": "pnpm build",
   "outputDirectory": "dist",
-  "installCommand": "pnpm install"
+  "installCommand": "pnpm install",
+  "trailingSlash": false,
+  "cleanUrls": true,
+  "redirects": [
+    { "source": "/posts/frontend-ai-code-review-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-e2e-evals-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-ui-regression-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-delivery-scorecard-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-release-readiness-checklist", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
+    { "source": "/posts/frontend-ai-browser-testing-release-gate-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 }
+  ]
 }
