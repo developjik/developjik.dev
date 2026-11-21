@@ -1,0 +1,102 @@
+---
+title: '브라우저 렌더링 파이프라인 이해하기'
+date: '2024-11-05'
+description: 'Parsing부터 Composite까지 브라우저가 화면을 그리는 전체 과정을 정리하고, 리플로우와 리페인트를 유발하는 코드를 살펴봅니다.'
+tags: ['Browser', 'Rendering', 'Web']
+---
+
+# 브라우저 렌더링 파이프라인 이해하기
+
+## 개요
+
+"DOM을 조작하면 화면이 다시 그려진다"는 말은 자주 하지만, 정확히 어떤 단계를 거쳐 다시 그려지는지 설명할 수 있는 개발자는 의외로 적습니다. 저도 성능 최적화를 하다 보니 이 파이프라인을 제대로 이해해야 하는 순간이 왔었고, 그때 정리한 내용을 공유합니다. 렌더링 파이프라인을 알면 "왜 이 코드는 느린가"에 대한 감이 잡힙니다.
+
+## Parsing: HTML과 CSS를 파싱하기
+
+브라우저가 HTML을 받으면 먼저 **DOM 트리**를 만듭니다. HTML 파서는 태그를 하나씩 읽으며 노드를 추가하는데, 이 과정에서 `<script>`를 만나면 일반적으로 파싱이 중단되고 스크립트를 실행한 뒤 이어집니다. 그래서 `defer`나 `async` 속성이 성능 이야기에 항상 등장하는 것이고요.
+
+CSS도 마찬가지로 파싱되어 **CSSOM** 트리가 됩니다. CSSOM이 완성되지 않으면 렌더링이 진행되지 않기 때문에, CSS는 렌더 블로킹 리소스로 분류됩니다.
+
+```html
+<!-- 파싱을 막는 script -->
+<script src="/heavy-analytics.js"></script>
+
+<!-- 파싱을 막지 않는 script -->
+<script defer src="/heavy-analytics.js"></script>
+```
+
+## Style: 어떤 스타일이 적용될지 계산하기
+
+DOM과 CSSOM이 준비되면 브라우저는 각 DOM 노드에 실제로 적용될 스타일 값을 계산합니다. 이 단계를 Style 계산이라고 부릅니다. 셀렉터 매칭과 캐스케이드 규칙이 여기서 적용되고, 상대 단위(`em`, `%`, `rem`)가 픽셀 같은 계산값으로 변환됩니다.
+
+이때 흥미로운 점은 셀렉터가 오른쪽에서 왼쪽으로 매칭된다는 것입니다. `ul li a { ... }`는 `a`를 먼저 찾고 부모로 올라가며 확인합니다. 그래서 깊은 자손 셀렉터보다 클래스 하나로 명확하게 지정하는 것이 계산 비용이 적습니다.
+
+## Layout: geometry 계산
+
+Style이 결정되면 각 요소가 화면에서 차지할 크기와 위치를 계산합니다. 이것이 **Layout(또는 Reflow)** 단계입니다. `width`, `height`, `position` 같은 기하학적 속성이 여기서 결정되죠.
+
+레이아웃 결과를 **렌더 트리(Render Tree)** 또는 레이아웃 트리라고 부르는 구조에 담는데, 이 트리에는 실제 그려질 요소만 들어갑니다. `display: none`인 요소는 렌더 트리에 아예 포함되지 않고, `visibility: hidden`은 포함되되 그리지 않는 차이가 있습니다.
+
+## Paint와 Composite
+
+**Paint**는 레이아웃된 요소를 실제 픽셀로 채우는 단계입니다. 텍스트, 색, 이미지, 그림자, 보더가 레이어별로 그려지죠. 그리고 **Composite**는 이렇게 그려진 여러 레이어를 합성해 최종 화면을 만듭니다. 합성은 GPU에서 수행되기 때문에 메인 스레드와는 별개로 빠르게 동작할 수 있습니다.
+
+`transform`과 `opacity`가 "부드러운 애니메이션 속성"로 권장되는 이유가 여기 있습니다. 이 둘은 Layout과 Paint를 건너뛰고 Composite만 다시 실행되기 때문입니다.
+
+```css
+/* 리플로우 + 리페인트 유발 */
+.box-anim-bad {
+  transition: left 0.3s;
+}
+
+/* 합성만 유발 */
+.box-anim-good {
+  transition: transform 0.3s;
+}
+```
+
+## 리플로우/리페인트를 유발하는 코드
+
+레이아웃을 건드리는 속성(`width`, `height`, `top`, `left`, `font-size` 등)을 변경하면 리플로우가 발생하고, `color`, `background` 같은 속성은 리페인트만 유발합니다. 문제는 JS에서 레이아웃 값을 읽으면 **강제 동기 레이아웃(forced synchronous layout)**이 발생한다는 점입니다.
+
+```javascript
+// 강제 동기 레이아우이트: 읽기와 쓰기가 번갈아 등장
+const items = document.querySelectorAll('.item');
+
+items.forEach((item) => {
+  const width = item.offsetWidth; // 읽기 → 여기서 레이아웃 강제 계산
+  item.style.width = width / 2 + 'px'; // 쓰기 → 레이아웃 무효화
+});
+
+// 개선: 읽기를 먼저 몰아서 하고 쓰기는 나중에
+const widths = items.map((item) => item.offsetWidth);
+items.forEach((item, i) => {
+  item.style.width = widths[i] / 2 + 'px';
+});
+```
+
+읽기와 쓰기를 분리하는 것만으로도 프레임 당 레이아웃 계산 횟수가 크게 줄어듭니다. 크롬 개발자 도구의 Performance 패널에서 Recalculate Style, Layout 이벤트를 직접 확인할 수 있으니 눈으로 확인해보시길 권합니다.
+
+## requestAnimationFrame의 역할
+
+`requestAnimationFrame`(rAF)은 브라우저의 다음 페인트 직전에 콜백을 실행해줍니다. 애니메이션 코드를 rAF로 감싸면 화면 주사율(보통 60fps, 즉 약 16.7ms)에 맞춰 실행되므로, `setTimeout(fn, 16)`으로 흉내 내는 것보다 프레임 드랍이 적고 백그라운드 탭에서는 실행이 중단되어 배터리도 아낍니다.
+
+```javascript
+function animate(el) {
+  let start = performance.now();
+
+  function tick(now) {
+    const progress = Math.min((now - start) / 1000, 1);
+    el.style.transform = `translateX(${progress * 200}px)`;
+    if (progress < 1) requestAnimationFrame(tick);
+  }
+
+  requestAnimationFrame(tick);
+}
+```
+
+요즘은 CSS 애니메이션이나 Web Animations API로 대체할 수 있는 경우가 많지만, JS로 값을 계산해야 하는 애니메이션에서는 여전히 rAF가 정답에 가깝습니다.
+
+## 마무리
+
+렌더링 파이프라인을 한 줄로 요약하면 **Parsing → Style → Layout → Paint → Composite**입니다. 핵심은 오른쪽 단계로 갈수록 비용이 저렴하다는 점입니다. 레이아웃을 바꾸는 코드를 합성만 유발하는 `transform` 기반으로 바꾸는 것, 읽기와 쓰기를 분리하는 것, 애니메이션을 rAF로 실행하는 것. 이 세 가지 습관만으로도 체감 성능은 크게 달라집니다. 다음에 "화면이 버벅인다"는 이야기를 들으면 파이프라인의 어느 단계가 병목인지부터 찾아보세요.

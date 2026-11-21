@@ -1,0 +1,115 @@
+---
+title: 'React 19 핵심 정리: Actions와 useOptimistic'
+date: '2025-08-05'
+description: 'React 19의 form Actions, useActionState, useOptimistic로 폼과 낙관적 UI를 간단하게 만드는 방법을 정리합니다.'
+tags: ['React']
+---
+
+# React 19 핵심 정리: Actions와 useOptimistic
+
+## 개요
+
+지금까지 폼 제출은 `onSubmit`에서 `e.preventDefault()`를 부르고, 로딩 상태를 `useState`로 만들고, 에러를 또 다른 state로 관리하는 패턴을 반복해왔습니다. React 19의 Actions는 이 반복을 프레임워크 차원으로 끌어 올렸습니다. 실제 프로젝트에 적용하며 배운 것들을 정리합니다.
+
+## form Actions
+
+React 19의 `<form>`은 `action` 속성에 함수를 받을 수 있습니다. 이 함수는 비동기 함수여도 되고, 제출 중 상태를 React가 관리합니다.
+
+```tsx
+function AddTodo() {
+  const [todos, setTodos] = useState<Todo[]>([]);
+
+  async function addTodo(formData: FormData) {
+    const title = formData.get('title') as string;
+    const saved = await api.createTodo({ title });
+    setTodos((prev) => [...prev, saved]);
+  }
+
+  return (
+    <form action={addTodo}>
+      <input name="title" required />
+      <button type="submit">추가</button>
+    </form>
+  );
+}
+```
+
+`e.preventDefault()`도, 별도의 `isSubmitting` state도 없습니다. 폼 데이터는 `FormData`로 그대로 받을 수 있어서 controlled 컴포넌트를 강제하지 않는 것도 편했습니다.
+
+## useActionState로 폼 상태 관리하기
+
+제출 결과(성공/에러)를 보여주려면 `useActionState`를 씁니다. action 함수의 시그니처가 `(prevState, formData)` 형태로 바뀌고, 반환값이 폼 상태가 됩니다.
+
+```tsx
+import { useActionState } from 'react';
+
+function LoginForm() {
+  const [state, formAction, isPending] = useActionState(
+    async (prev: { error?: string }, formData: FormData) => {
+      const email = formData.get('email') as string;
+      const password = formData.get('password') as string;
+
+      const result = await api.login({ email, password });
+      if (!result.ok) {
+        return { error: result.message };
+      }
+      return {};
+    },
+    {}
+  );
+
+  return (
+    <form action={formAction}>
+      <input name="email" type="email" required />
+      <input name="password" type="password" required />
+      {state.error && <p role="alert">{state.error}</p>}
+      <button disabled={isPending}>{isPending ? '로그인 중…' : '로그인'}</button>
+    </form>
+  );
+}
+```
+
+`isPending`은 hook이 그대로 제공해서 로딩 표시용 state도 필요 없어졌습니다.
+
+## useOptimistic으로 낙관적 UI
+
+좋아요 버튼처럼 서버 응답을 기다리면 답답한 UI에는 낙관적 업데이트가 답이었습니다. `useOptimistic`은 서버 상태와 "임시로 보여줄 상태"를 함께 관리합니다.
+
+```tsx
+function LikeButton({ postId, initialLiked }: { postId: string; initialLiked: boolean }) {
+  const [liked, setLiked] = useState(initialLiked);
+  const [optimisticLiked, addOptimistic] = useOptimistic(
+    liked,
+    (current, next: boolean) => next
+  );
+
+  async function toggle() {
+    addOptimistic(!optimisticLiked);
+    try {
+      const result = await api.toggleLike(postId);
+      setLiked(result.liked);
+    } catch {
+      // 에러 시 useOptimistic 값은 자동으로 롤백됩니다
+      alert('처리에 실패했습니다.');
+    }
+  }
+
+  return (
+    <button onClick={toggle} aria-pressed={optimisticLiked}>
+      {optimisticLiked ? '좋아요 취소' : '좋아요'}
+    </button>
+  );
+}
+```
+
+핵심 동작은 이렇습니다. `addOptimistic`을 부르면 즉시 낙관적 값이 UI에 반영되고, transition이 끝나면(여기서는 `setLiked`가 확정되면) 원래 상태로 돌아갑니다. 요청이 실패하면 확정 state는 그대로이므로 자연스럽게 롤백됩니다.
+
+## 적용하며 배운 점
+
+- 기존 `useFormState`는 `useActionState`로 이름이 바뀌었고, 제출 중 상태는 `useActionState`의 `isPending`으로도 접근할 수 있습니다.
+- Actions는 절대적 대체제가 아니라, 폼 중심의 뮤테이션에서 코드가 가장 많이 줄어듭니다.
+- Next.js의 Server Actions와 결합하면 `api` 호출 없이 서버 함수를 직접 넘길 수도 있습니다.
+
+## 마무리
+
+React 19의 Actions는 "폼 제출 + 로딩 + 에러 + 낙관적 업데이트"라는 흔한 조합의 보일러플레이트를 크게 줄여줬습니다. 특히 `useOptimistic`은 이전에 손대기 귀찮았던 낙관적 UI를 기본 도구처럼 쓰게 만들어준 것이 가장 큰 변화였습니다.

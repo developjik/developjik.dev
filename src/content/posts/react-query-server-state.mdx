@@ -1,0 +1,120 @@
+---
+title: '서버 상태와 클라이언트 상태를 분리하라'
+date: '2025-04-15'
+description: 'TanStack Query를 중심으로 서버 상태 캐싱과 재검증 전략을 정리하고, useState로 관리하던 데이터와의 경계를 다시 그려봤습니다.'
+tags: ['React', 'Data Fetching']
+---
+
+# 서버 상태와 클라이언트 상태를 분리하라
+
+## 개요
+
+어느 순간 프로젝트의 상태 대부분이 사실 "서버에서 가져온 데이터의 복사본"이라는 걸 깨달았습니다. 로딩 플래그, 에러 문자열, 수동 새로고침 로직까지 포함해 코드 절반이 서버 데이터를 담는 그릇이었습니다. 이번 글에서는 이 경계를 다시 그은 이야기를 정리합니다.
+
+## 두 종류의 상태
+
+프론트엔드 상태를 크게 나누면 클라이언트 상태와 서버 상태입니다. 클라이언트 상태는 모달 열림 여부, 폼 입력값, 테마처럼 UI가 소유하고 동기적으로 접근되는 값입니다. 서버 상태는 서버가 진실의 원천이고, 클라이언트는 캐시를 들고 있을 뿐입니다.
+
+문제는 둘을 똑같은 방식(`useState` + `useEffect`)으로 다룰 때 생깁니다. 서버 상태는 본질적으로 비동기적이고, 소유권도 우리에게 없고, 다른 사람이 바꿀 수 있고, 언제든 stale해질 수 있습니다. 이 특성을 `useState`로 직접 관리하면 로딩/에러/재요청/캐시 무효화 코드를 매 화면마다 손으로 쓰게 됩니다.
+
+## TanStack Query 시작하기
+
+TanStack Query는 이 "서버 상태 캐시"를 전담해 주는 라이브러리입니다. QueryClient를 앱에 한 번 얹고 useQuery로 선언적으로 데이터를 가져옵니다.
+
+```tsx
+import {
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000,
+      retry: 1,
+    },
+  },
+});
+
+export function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      {/* 라우트 */}
+    </QueryClientProvider>
+  );
+}
+```
+
+```tsx
+import { useQuery } from '@tanstack/react-query';
+
+type Post = { id: number; title: string };
+
+async function fetchPosts(): Promise<Post[]> {
+  const res = await fetch('/api/posts');
+  if (!res.ok) throw new Error('게시글 조회 실패');
+  return res.json();
+}
+
+export function PostList() {
+  const { data, isPending, error } = useQuery({
+    queryKey: ['posts'],
+    queryFn: fetchPosts,
+  });
+
+  if (isPending) return <p>불러오는 중…</p>;
+  if (error) return <p>에러가 발생했습니다: {error.message}</p>;
+
+  return (
+    <ul>
+      {data.map((post) => (
+        <li key={post.id}>{post.title}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+같은 `queryKey`를 쓰는 컴포넌트는 하나의 캐시 엔트리를 공유합니다. 목록 화면과 사이드바 위젯이 같은 API를 쓴다면 요청도 자동으로 중복 제거됩니다. `isLoading` 대신 `isPending`을 쓰는 것이 v5의 표준이 된 점도 기억해 두면 좋습니다.
+
+## 캐싱과 재검증
+
+TanStack Query의 핵심 개념은 staleTime과 gcTime(구 cacheTime)입니다. staleTime은 데이터가 "신선하다"고 보는 시간으로, 이 시간 안에서는 같은 쿼리를 다시 마운트해도 네트워크 요청이 일어나지 않습니다. gcTime은 관찰자가 없어진 캐시가 메모리에 남는 시간입니다.
+
+재검증 트리거도 다양합니다. 컴포넌트가 다시 마운트될 때, 윈도우가 다시 포커스될 때(refetchOnWindowFocus, 기본 켜짐), 네트워크가 복구될 때. 사용자가 다른 탭을 보고 돌아온 순간 데이터를 다시 확인해 주는 것만으로 "방금 수정했는데 안 보여요"류의 문의가 눈에 띄게 줄었습니다.
+
+변경(mutation) 후에는 캐시 무효화로 일관성을 맞춥니다.
+
+```tsx
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+
+export function useAddPost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (title: string) =>
+      fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      }).then((res) => {
+        if (!res.ok) throw new Error('등록 실패');
+        return res.json();
+      }),
+    onSuccess: () => {
+      // 'posts'로 시작하는 모든 쿼리를 재검증한다
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+    },
+  });
+}
+```
+
+## useState와의 경계
+
+정리하면 제 기준은 이렇습니다. 서버가 원천인 데이터는 전부 쿼리 키로 옮기고, `useState`는 UI 로컬 상태에만 남깁니다. 폼 입력값도 제출 전까지는 클라이언트 상태이고, 제출 성공 시점에 mutation으로 넘어갑니다. 파생값은 `useMemo`나 그냥 렌더 중 계산으로 처리하고 캐시에 넣지 않습니다.
+
+이 경계가 명확해지면 서버 통신 부수 효과는 "이 데이터가 필요하다"는 선언(useQuery)과 "서버를 바꿔달라"는 명령(useMutation)으로만 존재하게 되고, `useEffect`로 데이터를 가져오는 코드는 거의 사라졌습니다.
+
+## 마무리
+
+서버 상태와 클라이언트 상태를 분리하는 순간 상태 관리의 절반 이상이 라이브러리에게 넘어가고, 남은 상태는 생각보다 단순해집니다. 전역 상태 라이브러리가 필요 없어지는 팀이 많은 이유가 바로 이 때문입니다. 데이터 페칭을 상태 관리의 문제가 아니라 캐싱의 문제로 바라보는 것, 그게 이 글의 요지입니다.

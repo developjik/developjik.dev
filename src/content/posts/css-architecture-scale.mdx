@@ -1,0 +1,88 @@
+---
+title: 'CSS 아키텍처: 유지보수 가능한 스타일 전략'
+date: '2025-05-06'
+description: 'BEM이 남긴 교훈부터 CSS Modules, 유틸리티 퍼스트까지 규모가 커질 때 스타일 코드를 지키는 전략과 트레이드오프를 정리했습니다.'
+tags: ['CSS', 'Architecture']
+---
+
+# CSS 아키텍처: 유지보수 가능한 스타일 전략
+
+## 개요
+
+스타일시트는 처음엔 언제나 깔끔합니다. 문제는 컴포넌트가 200개를 넘어가고 디자인 변경이 쌓이면서 시작됩니다. 어디서든 이길 수 있는 `!important`, 지우면 무너지는 클래스, 이름 짓기에만 5분 쓰는 하루. 이번 글에서는 CSS가 커지면서 겪은 문제와 그에 대한 전략들의 트레이드오프를 정리합니다.
+
+## 문제의 근원: 전역 네임스페이스
+
+CSS의 모든 클래스는 전역입니다. 이 단순한 사실이 모든 문제의 출발점입니다. `button`이라는 클래스를 두 컴포넌트에서 쓰면 나중에 쓴 쪽이 이기고, 명시도 경쟁에서 지고 싶지 않아 선택자가 점점 길어집니다. 결국 캐스케이드와 상속이라는 CSS의 강점이 발목을 잡는 상황이 옵니다.
+
+## BEM의 교훈
+
+BEM(Block Element Modifier)은 네이밍 규칙으로 이 문제에 대응한 방법론입니다. `card__title`, `card__title--disabled`처럼 블록/요소/수정자로 이름을 짓고, 선택자는 최대한 납작하게 유지합니다.
+
+```css
+/* BEM: 명시도 1단계로 평평하게 유지한다 */
+.card { border: 1px solid #ddd; border-radius: 8px; }
+.card__title { font-size: 1.25rem; font-weight: 700; }
+.card--featured { border-color: #6366f1; }
+.card--featured .card__title { color: #6366f1; }
+```
+
+BEM이 준 가장 큰 선물은 "이름의 충돌을 사람이 관리한다"는 규칙 자체였습니다. 마크업을 보면 스타일을 유추할 수 있고, 새 스타일을 추가할 때 기존 것을 덮어쓸 걱정이 줄어듭니다. 다만 비판도 분명합니다. 클래스 이름이 장황해지고, 규칙은 팀원 전원이 지켜야만 유효하다는 점입니다. 한 명이 `.card .title`을 쓰기 시작하면 명시도 경쟁이 곧 돌아옵니다. 사람의 규율에 의존하는 아키텍처는 반드시 느슨해집니다.
+
+## CSS Modules: 충돌을 도구가 막아주는 시대
+
+BEM의 문제를 근본적으로 해결한 건 빌드 도구였습니다. CSS Modules는 파일 단위로 클래스 이름을 해시 처리해서, 실제로 충돌이 일어날 수 없게 만듭니다.
+
+```css
+/* Card.module.css */
+.card { border: 1px solid #ddd; border-radius: 8px; }
+.title { font-size: 1.25rem; font-weight: 700; }
+.featured { border-color: #6366f1; }
+.featured .title { color: #6366f1; }
+```
+
+```tsx
+import styles from './Card.module.css';
+
+export function Card({ title, featured }: { title: string; featured?: boolean }) {
+  return (
+    <div className={`${styles.card} ${featured ? styles.featured : ''}`}>
+      <h3 className={styles.title}>{title}</h3>
+    </div>
+  );
+}
+```
+
+이름 짓기 걱정이 사라지고 컴포넌트와 스타일이 파일 단위로 붙어 있으니 삭제도 쉬워집니다. 컴포넌트를 지우면 모듈 파일도 함께 지우면 그만입니다. 단점도 있습니다. 조건부 클래스 문자열이 지저분해지고(clsx 같은 도구로 완화), 스타일을 자유롭게 조합하려면 결국 CSS 자체의 조합 능력에 의존해야 합니다.
+
+## 유틸리티 퍼스트의 트레이드오프
+
+Tailwind CSS 같은 유틸리티 퍼스트 접근은 방향을 아예 바꿉니다. 의미 있는 클래스 이름을 짓는 대신, 미리 정의된 유틸리티를 조합합니다.
+
+```tsx
+export function Card({ title, featured }: { title: string; featured?: boolean }) {
+  return (
+    <div
+      className={`rounded-lg border p-4 ${
+        featured ? 'border-indigo-500' : 'border-gray-300'
+      }`}
+    >
+      <h3 className={`text-xl font-bold ${featured ? 'text-indigo-500' : ''}`}>
+        {title}
+      </h3>
+    </div>
+  );
+}
+```
+
+장점은 분명합니다. 스타일과 마크업이 한눈에 보이고, 사용하지 않는 CSS는 빌드에서 사라지며, 네이밍 회의가 없어집니다. 디자인 시스템의 토큰(색, 간격)을 유틸리티로 강제할 수 있는 것도 큰 이득입니다.
+
+트레이드오프도 있습니다. 마크업이 장황해지고, 같은 유틸리티 조합이 반복되면 컴포넌트로 추상화하는 규율이 여전히 필요합니다. 유틸리티 퍼스트는 "이름 짓기 문제"를 "추상화 문제"로 바꿀 뿐, 설계를 안 해도 되는 마법은 아닙니다.
+
+## 어떻게 고를 것인가
+
+제 결론은 단순합니다. 새 프로젝트면 팀이 가장 익숙한 것을 고르되, 반복되는 패턴은 반드시 컴포넌트로 추상화하는 규칙을 함께 정하는 것입니다. 유틸리티 퍼스트든 CSS Modules든, 무너지는 지점은 언제나 "복붙된 조합이 관리되지 않을 때"였습니다. 그리고 어떤 전략을 골라도 디자인 토큰(색상, 간격, 타이포그래피 스케일)을 코드로 정의하는 것만큼은 지키고 있습니다. 토큰이 흔들리면 어떤 아키텍처도 일관성을 지켜주지 못합니다.
+
+## 마무리
+
+CSS 아키텍처의 역사는 전역 네임스페이스와의 싸움입니다. BEM은 규칙으로, CSS Modules는 도구로, 유틸리티 퍼스트는 발상의 전환으로 문제에 답했습니다. 각각의 교훈을 알고 있으면 어떤 도구를 쓰든 무너지지 않는 스타일 코드를 만들 수 있습니다.

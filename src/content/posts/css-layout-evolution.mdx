@@ -1,0 +1,121 @@
+---
+title: 'CSS 레이아웃 진화사: float에서 Grid까지'
+date: '2024-11-19'
+description: 'float 핵으로 레이아웃을 만들던 시대부터 Flexbox, Grid, 컨테이너 쿼리까지 CSS 레이아웃의 변천사를 코드와 함께 정리합니다.'
+tags: ['CSS', 'Layout']
+---
+
+# CSS 레이아웃 진화사: float에서 Grid까지
+
+## 개요
+
+CSS로 레이아웃을 잡는 방법은 10년 만에 완전히 바뀌었습니다. 제가 처음 배울 때는 `float: left`와 `clear`의 세계였고, 지금은 Grid 한 줄로 끝나는 시대가 됐죠. 이 글에서는 각 시대의 코드를 나란히 놓고 비교하며, 레이아웃 기법이 왜 이렇게 진화했는지 정리해봅니다. 과거의 방식을 이해하면 현재의 방식이 왜 이 설계인지 보입니다.
+
+## float의 시대: 본래 목적이 아닌 용도
+
+`float`은 원래 신문처럼 텍스트가 이미지를 감싸게 흐르도록 만드는 속성이었습니다. 하지만 CSS2 시대에는 좌우 컬럼 배치를 할 방법이 이것뿐이었고, 사람들은 float으로 페이지 전체 레이아웃을 만들기 시작했습니다.
+
+```css
+/* float 기반 2컬럼 레이아웃 */
+.sidebar {
+  float: left;
+  width: 200px;
+}
+
+.content {
+  margin-left: 220px;
+}
+
+/* 부모 높이 무너짐 방지용 clearfix 핵 */
+.clearfix::after {
+  content: '';
+  display: block;
+  clear: both;
+}
+```
+
+문제는 바로 아래에 있습니다. float된 요소는 문서 흐름에서 벗어나서 부모의 높이가 무너지고, 그걸 막으려고 `clearfix`라는 핵이 필요했죠. `box-sizing: border-box`와 함께 당시 필수 유틸이었습니다.
+
+## Flexbox: 1차원 레이아웃의 해답
+
+2009년 초안이 나오고 2013년경 브라우저 지원이 안정된 Flexbox는 "한 방향으로 나열하고 분배한다"는 문제를 제대로 해결했습니다. 수직 중앙정렬이라는 오랜 숙제가 단 세 줄로 끝난 순간이었습니다.
+
+```css
+/* 수평 나열 + 간격 분배 */
+.nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+/* 그 악명 높던 수직 중앙정렬 */
+.center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+```
+
+Flexbox는 본질적으로 **1차원** 도구입니다. 행이나 열 중 하나의 축에서 항목을 배치하고 늘리는 데 최적화되어 있죠. 덕분에 내비게이션, 툴바, 카드 내부 배치 같은 곳에서는 지금도 최고의 선택입니다.
+
+## Grid: 2차원 레이아웃의 도착
+
+2017년경부터 지원되기 시작한 Grid는 행과 열을 동시에 다루는 진짜 2차원 레이아웃 시스템이었습니다. 페이지 골격, 갤러리, 대시보드 같은 "격자"가 필요한 곳에서 float 시대의 모든 핵을 대체했습니다.
+
+```css
+/* 전형적인 페이지 레이아웃 */
+.layout {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  grid-template-rows: 64px 1fr auto;
+  grid-template-areas:
+    'header header'
+    'sidebar main'
+    'footer footer';
+  min-height: 100vh;
+}
+
+.header  { grid-area: header; }
+.sidebar { grid-area: sidebar; }
+.main    { grid-area: main; }
+.footer  { grid-area: footer; }
+
+/* 반응형 격자 */
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+```
+
+`repeat(auto-fill, minmax(...))` 한 줄로 미디어 쿼리 없이 반응형 카드 그리드가 만들어집니다. float 시대에 이걸 하려면 자바스크립트 라이브러리가 필요했죠.
+
+## 컨테이너 쿼리: 반응형의 단위가 바뀌다
+
+미디어 쿼리의 한계는 항상 **뷰포트**를 기준으로 한다는 점이었습니다. 사이드바 안에 있는 카드는 화면이 넓어도 좁은데, 뷰포트 기준으로는 "넓은 화면" 스타일이 적용되는 것이죠. 컨테이너 쿼리는 2023년부터 주요 브라우저 모두에서 지원되기 시작했고, 쿼리의 기준을 부모 컨테이너로 옮겼습니다.
+
+```css
+.card-wrapper {
+  container-type: inline-size;
+}
+
+/* 컨테이너 너비가 400px 이상일 때만 가로 배치 */
+@container (min-width: 400px) {
+  .card {
+    display: flex;
+    gap: 12px;
+  }
+}
+```
+
+컴포넌트가 자기가 놓인 환경에 스스로 반응하게 됐다는 점에서, 컴포넌트 기반 개발 시대에 딱 맞는 진화라고 생각합니다.
+
+## 마무리
+
+- **float**: 텍스트 감싸기용. 레이아웃용은 이제 과거의 유물
+- **Flexbox**: 1차원 나열과 분배. UI 컴포넌트 내부의 정답
+- **Grid**: 2차원 페이지 골격과 격자
+- **컨테이너 쿼리**: 뷰포트가 아닌 컨테이너 기준 반응형
+
+각 기법은 이전 세대의 불편함에 대한 응답이었습니다. 그래서인지 요즘은 레거시 CSS를 읽을 때 "아, 이 시절엔 이게 최선이었구나"가 느껴집니다. 새 프로젝트에서 고민된다면, 골격은 Grid, 내부는 Flexbox, 컴포넌트 단위 반응형은 컨테이너 쿼리부터 검토해보시길 권합니다.

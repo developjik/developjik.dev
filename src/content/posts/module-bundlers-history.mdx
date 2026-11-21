@@ -1,0 +1,103 @@
+---
+title: 'Webpack에서 Vite까지: 번들러의 역사와 동작 원리'
+date: '2024-12-19'
+description: '의존성 그래프부터 HMR의 동작 원리까지 모듈 번들러의 핵심 개념을 정리하고, ESM 시대에 Vite가 왜 빨라졌는지 설명합니다.'
+tags: ['Build', 'Vite', 'Webpack']
+---
+
+# Webpack에서 Vite까지: 번들러의 동작 원리와 역사
+
+## 개요
+
+프론트엔드 개발 환경은 10년 사이에 몇 번이나 뒤집혔지만, 그 중심에는 항상 번들러가 있었습니다. 저는 Webpack 설정과 씨름하던 시절을 지나 Vite로 넘어왔는데, "왜 Vite가 빠른가"를 설명하려면 번들러의 기본 동작부터 이해해야 했습니다. 의존성 그래프, HMR, ESM의 관계를 중심으로 정리해봤습니다.
+
+## 왜 번들러가 필요했나
+
+브라우저가 예전에 지원하던 것은 `<script>` 태그뿐이었습니다. 파일을 나누면 전역 스코프 오염과 로딩 순서 문제가 생겼고, 그래서 사람들은 파일을 합치는 도구를 만들었습니다. `concat` 스크립트로 시작한 것이 점점 발전해 의존관계까지 스스로 찾는 번들러가 된 것이죠.
+
+## 의존성 그래프: 모든 번들러의 심장
+
+Webpack이든 Rollup이든 esbuild든, 번들러의 핵심 동작은 동일합니다.
+
+1. **진입점(entry)** 파일을 읽는다
+2. `import`/`require` 구문을 찾아 의존성 목록을 만든다
+3. 각 의존성을 다시 읽으며 그래프를 반복해서 완성한다
+4. 완성된 그래프를 하나의 파일(또는 청크)로 출력한다
+
+Webpack의 `resolve` 과정이 하는 일이 정확히 2번입니다. 확장자 추론, `node_modules` 탐색, `alias` 적용을 거쳐 각 import를 실제 파일 경로로 변환하죠. 프로젝트가 커질수록 이 그래프가 거대해지고, 모든 파일을 파싱·변환해야 하니 빌드 시간이 선형적으로 늘어납니다. 이것이 Webpack 시대 개발 서버 시작이 느렸던 근본 원인입니다.
+
+## Webpack 시대: 번들의 왕
+
+Webpack(2012년)은 "무엇이든 모듈로 본다"는 점에서 획기적이었습니다. JS뿐 아니라 CSS, 이미지, 폰트까지 전부 의존성 그래프의 노드로 취급했습니다.
+
+```javascript
+// 전형적인 webpack.config.js
+module.exports = {
+  entry: './src/index.js',
+  output: {
+    filename: '[name].[contenthash].js',
+    path: path.resolve(__dirname, 'dist'),
+  },
+  module: {
+    rules: [
+      { test: /\.js$/, use: 'babel-loader' },
+      { test: /\.css$/, use: ['style-loader', 'css-loader'] },
+    ],
+  },
+  plugins: [new HtmlWebpackPlugin({ template: './index.html' })],
+};
+```
+
+loader 체인과 plugin 시스템은 강력했지만, 그 강력함이 설정 복잡도로 돌아왔습니다. create-react-app 같은 설정 은닉 도구가 필수가 된 시기이기도 하죠.
+
+## HMR의 동작 원리
+
+Hot Module Replacement는 개발 경험을 바꾼 발명품입니다. 새로고침 없이 변경된 모듈만 교체하니 상태가 보존됩니다. 동작을 단순화하면 이렇습니다.
+
+1. 개발 서버와 브라우저가 웹소켓으로 연결된다
+2. 파일이 저장되면 서버가 해당 모듈을 다시 컴파일해 새 버전(hot update)을 만든다
+3. 웹소켓으로 브라우저에 "이 모듈이 바뀌었다"고 알린다
+4. 런타임(HMR runtime)이 새 모듈을 받아 교체하고, 모듈(예: React Fast Refresh)이 상태 보존 처리를 한다
+5. 교체할 수 없으면 부모로 거슬러 올라가다 결국 페이지 리로드로 귀결된다
+
+```javascript
+// 모듈이 직접 HMR 동작을 정의할 수도 있다 (webpack style)
+if (import.meta.webpackHot) {
+  import.meta.webpackHot.accept();
+}
+```
+
+프레임워크 입장에서 상태를 유지하며 컴포넌트만 갈아끼우는 React Fast Refresh가 이 위에서 동작합니다.
+
+## ESM 시대와 Vite의 접근
+
+문제를 바꾼 것은 브라우저의 변화였습니다. 이제 브라우저가 네이티브로 ES modules(`import`/`export`)를 지원합니다. Vite(2020년 등장)의 통찰은 이것입니다. **개발 중에는 번들링을 하지 말자.**
+
+개발 서버에서 Vite는 이렇게 동작합니다.
+
+- 의존성(`node_modules`의 react 같은 것들)은 사전에 esbuild로 번들링해 두고 (의존성은 잘 안 바뀌니까)
+- 우리 애플리케이션 코드는 요청이 오면 그때그때 변환해 브라우저에게 네이티브 ESM으로 전달한다
+- 브라우저가 `import`를 보고 필요한 모듈을 각각 요청하므로, 진입점부터 전체를 번들링할 필요가 없다
+
+그래서 개발 서버 시작이 거의 즉각적이고, HMR도 변경된 모듈 하나만 처리하면 됩니다. 파일이 1,000개든 10,000개든 수정 순간의 비용은 그 모듈 하나입니다. 대신 프로덕션 빌드에서는 여전히 번들링을 수행합니다(기존 Rollup, 최근에는 Rolldown으로의 전환이 진행 중입니다). 브라우저가 수백 개의 모듈을 개별 요청하는 건 개발에서는 괜찮지만 프로덕션에서는 waterfall 비용이 있기 때문입니다.
+
+```javascript
+// vite.config.js — 설정이 하려는 일은 webpack과 같지만 훨씬 짧다
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: { vendor: ['react', 'react-dom'] },
+      },
+    },
+  },
+});
+```
+
+## 마무리
+
+번들러의 역사는 "의존성 그래프를 어떻게 빠르게 만들고 전달할까"의 역사였습니다. Webpack은 모든 것을 그래프로 묶어 강력함을 얻었고, Vite는 브라우저가 ESM을 이해하게 된 시점에 개발 중 번들링 자체를 제거했습니다. 도구는 바뀌어도 의존성 그래프, 변환(transform), HMR이라는 개념은 계속 이어지므로, 이 세 가지만 기억해두면 다음 세대 도구가 나와도 금방 적응할 수 있을 겁니다.

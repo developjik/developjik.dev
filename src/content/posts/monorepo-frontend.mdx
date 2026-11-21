@@ -1,0 +1,101 @@
+---
+title: '프론트엔드 모노레포 도입기'
+date: '2025-07-15'
+description: 'pnpm 워크스페이스와 Turborepo 캐싱으로 여러 패키지를 관리하고 CI 시간을 단축한 과정을 정리합니다.'
+tags: ['Monorepo', 'Tooling']
+---
+
+# 프론트엔드 모노레포 도입기
+
+## 개요
+
+서비스가 늘면서 웹 앱 두 개, 디자인 시스템, 공용 유틸리티가 각각 다른 저장소에 흩어졌습니다. 공통 버튼을 고치면 네 곳에 복붙하던 시절을 끝내기 위해 모노레포를 도입했습니다. 이 글은 pnpm 워크스페이스 + Turborepo 조합으로 정착하기까지의 기록입니다.
+
+## pnpm 워크스페이스 구성
+
+먼저 루트에 `pnpm-workspace.yaml`을 두고 패키지 위치를 선언했습니다.
+
+```yaml
+packages:
+  - 'apps/*'
+  - 'packages/*'
+```
+
+```text
+.
+├── apps/
+│   ├── web/        # 메인 서비스 (Next.js)
+│   └── admin/      # 어드민 (Vite)
+├── packages/
+│   ├── ui/         # 디자인 시스템
+│   └── utils/      # 공용 유틸리티
+└── pnpm-workspace.yaml
+```
+
+내부 패키지 의존성은 버전 대신 `workspace` 프로토콜로 연결합니다.
+
+```json
+{
+  "name": "@myorg/web",
+  "dependencies": {
+    "@myorg/ui": "workspace:*"
+  }
+}
+```
+
+`workspace:*`를 쓰면 로컬 디렉터리가 심볼링크로 연결되어, ui 패키지를 고치면 web에서 바로 반영됩니다. npm의 중복 설치 문제도 pnpm의 구조적 symlink 덕분에 깔끔하게 해결됐습니다.
+
+## Turborepo로 작업 오케스트레이션
+
+패키지가 많아지니 "빌드 순서를 어떻게 보장하지?"가 문제였습니다. Turborepo는 의존성 그래프를 보고 알아서 순서를 정해줍니다. `turbo.json`에 파이프라인을 선언했습니다.
+
+```json
+{
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "lint": {},
+    "test": {
+      "dependsOn": ["build"]
+    }
+  }
+}
+```
+
+`"^build"`는 "내가 의존하는 패키지의 build가 먼저 끝나야 한다"는 뜻입니다. 이제 루트에서 `pnpm turbo build` 한 번이면 utils → ui → web 순서로 알아서 빌드됩니다.
+
+## 캐싱과 CI 시간 단축
+
+Turborepo의 진짜 힘은 캐싱입니다. 입력 파일이 바뀌지 않은 패키지의 빌드 결과는 이전 출력을 그대로 재사용합니다.
+
+```bash
+$ pnpm turbo build
+
+• Packages in scope: web, admin, @myorg/ui, @myorg/utils
+• Remote caching: off
+  @myorg/utils:build: cache hit, replaying output
+  @myorg/ui:build: cache hit, replaying output
+  web:build: build started...
+```
+
+README 수정만으로 PR이 열리면 네 패키지 중 실제로 빌드되는 것은 없어서, CI의 프론트엔드 잡이 몇 분 걸리던 것이 수십 초로 줄었습니다. GitHub Actions에서는 원격 캐시(Vercel 제공)를 연결해 CI 머신 간에도 캐시를 공유했습니다.
+
+## CI 설정
+
+```yaml
+- uses: pnpm/action-setup@v4
+- uses: actions/setup-node@v4
+  with:
+    node-version: 22
+    cache: pnpm
+- run: pnpm install --frozen-lockfile
+- run: pnpm turbo lint test build
+```
+
+`--frozen-lockfile`로 lockfile 불일치를 막고, setup-node의 `cache: pnpm`으로 의존성 설치도 캐시했습니다. 변경된 패키지만 영향 받는지 걸러주는 `turbo run test --filter=...[origin/main]` 같은 필터도 PR 체크에 유용했습니다.
+
+## 마무리
+
+모노레포 도입의 최대 수확은 도구보다 "공통 코드를 고치는 비용이 0에 가까워졌다"는 점입니다. pnpm 워크스페이스로 연결 구조를 만들고, Turborepo가 순서와 캐시를 책임지니 CI 시간과 컨텍스트 스위칭 비용이 모두 줄었습니다. 저장소가 3개 이상으로 늘었다면 고민해볼 시점입니다.

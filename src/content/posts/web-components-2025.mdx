@@ -1,0 +1,147 @@
+---
+title: 'Web Components: 프레임워크 없이 컴포넌트 만들기'
+date: '2025-11-13'
+description: 'Custom Elements와 Shadow DOM으로 프레임워크 없이 컴포넌트를 만들어보고, React 앱 안에서 함께 쓰는 방법과 실사용의 경계를 정리했습니다.'
+tags: ['Web Components']
+---
+
+# Web Components: 프레임워크 없이 컴포넌트 만들기
+
+## 개요
+
+디자인 시스템 컴포넌트를 여러 팀에 배포해야 하는 일이 있었습니다. 어떤 팀은 React, 어떤 팀은 Vue, 어딘가는 템플릿 엔진만 쓰고 있어서 "모두가 쓸 수 있는 컴포넌트"를 고민하다 Web Components를 직접 써봤습니다. 이 글에서는 Custom Elements와 Shadow DOM 기본기부터 React와의 공존, 그리고 어디까지 쓰는 게 좋았는지의 경계를 정리합니다.
+
+## Custom Elements 기초
+
+Web Components의 핵심은 브라우저 표준인 Custom Elements입니다. `customElements.define`으로 나만의 태그를 정의합니다.
+
+```js
+class StarRating extends HTMLElement {
+  static get observedAttributes() {
+    return ['value'];
+  }
+
+  connectedCallback() {
+    this.render();
+  }
+
+  attributeChangedCallback() {
+    if (this.isConnected) this.render();
+  }
+
+  render() {
+    const value = Number(this.getAttribute('value') ?? 0);
+    this.innerHTML = '';
+    for (let i = 1; i <= 5; i++) {
+      const star = document.createElement('span');
+      star.textContent = i <= value ? '★' : '☆';
+      star.setAttribute('aria-hidden', 'true');
+      this.appendChild(star);
+    }
+    this.setAttribute('role', 'img');
+    this.setAttribute('aria-label', `별점 ${value}점 만점에 5점`);
+  }
+}
+
+customElements.define('star-rating', StarRating);
+```
+
+규칙은 몇 가지뿐입니다. 태그 이름에는 하이픈이 필수이고(`star-rating`), 라이프사이클 콜백(`connectedCallback`, `attributeChangedCallback` 등)이 마운트/갱신 시점을 알려줍니다. `observedAttributes`에 등록한 속성만 변경 감지 대상이 된다는 점이 React의 props와 달라 처음에 헷갈렸습니다.
+
+## Shadow DOM으로 스타일 캡슐화
+
+외부 CSS가 스며들지 않게 하려면 Shadow DOM을 붙입니다.
+
+```js
+class FancyButton extends HTMLElement {
+  connectedCallback() {
+    const shadow = this.attachShadow({ mode: 'open' });
+    shadow.innerHTML = `
+      <style>
+        button {
+          font: inherit;
+          padding: 0.5rem 1rem;
+          border: 1px solid currentColor;
+          border-radius: 8px;
+          background: transparent;
+          color: inherit;
+          cursor: pointer;
+        }
+        button:hover { background: rgba(0, 0, 0, 0.05); }
+      </style>
+      <button><slot></slot></button>
+    `;
+  }
+}
+
+customElements.define('fancy-button', FancyButton);
+```
+
+포인트는 두 가지였습니다.
+
+- `<slot>` — 일반 DOM의 `children`을 그림자 트리 안으로 통과시킵니다. React의 `children`과 비슷한 역할이라 자연스러웠습니다.
+- 스타일 격리는 양날입니다. 내부 스타일이 밖으로 안 새는 대신, 디자인 토큰 같은 전역 CSS 변수는 상속되므로 `color: var(--brand, inherit)` 식으로 통로를 열어둬야 테마가 적용됐습니다. CSS 커스텀 프로퍼티는 Shadow DOM 경계를 넘어 상속되는 것이 핵심 팁이었습니다.
+
+## React와 공존하기
+
+React 19 이전에는 Custom Element에 속성을 넘길 때 문제가 있었습니다. React는 알 수 없는 태그의 props를 속성(attribute)이 아니라 프로퍼티로 설정하지 않는 경우가 있어 객체나 함수가 전달되지 않는 문제였습니다. 그래서 래퍼를 만들거나 ref로 직접 프로퍼티를 할당하는 패턴을 썼습니다.
+
+```tsx
+import { useRef, useEffect } from 'react';
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'star-rating': React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement>,
+        HTMLElement
+      >;
+    }
+  }
+}
+
+export function StarRatingReact({ value }: { value: number }) {
+  const ref = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (ref.current) ref.current.setAttribute('value', String(value));
+  }, [value]);
+
+  return <star-rating ref={ref} value={value} />;
+}
+```
+
+React 19부터는 Custom Elements 지원이 개선되어 props를 프로퍼티와 속성 중 적절한 쪽으로 설정해 주고 이벤트 핸들러(`onXxx`)도 연결해 줍니다. 덕분에 래퍼 코드가 상당히 줄었습니다. 다만 이벤트는 Custom Event로 직접 디스패치하는 규약을 정해 쓰고 있습니다.
+
+```js
+// 컴포넌트 내부에서 이벤트 발행
+this.dispatchEvent(
+  new CustomEvent('rate-change', {
+    detail: { value: next },
+    bubbles: true,
+  })
+);
+```
+
+## 실사용의 경계
+
+한 달 정도 실제 컴포넌트를 만들어보니 잘 맞는 자리와 아닌 자리가 선명해졌습니다.
+
+잘 맞았던 자리는 "프레임워크와 무관하게 배포되는 위젯"이었습니다. 별점, 배지, 토스트 컨테이너처럼 상태가 단순하고 라이프사이클이 얕은 컴포넌트는 Web Components로 만들어 어느 팀에나 `<script>` 하나로 전달할 수 있었습니다.
+
+맞지 않았던 자리는 복잡한 상태와 리스트 렌더링이 얽힌 화면이었습니다. 서버에서 받은 목록을 필터·정렬·페이지네이션하는 UI를 순수 Custom Element로 만들었을 때, 렌더링 코드가 손으로 관리하는 가상 DOM이 되어버려 생산성이 뚝 떨어졌습니다. 결국 그 컴포넌트는 Lit을 도입해 반응형 선언(`@property`)으로 다시 쓰거나, 애초에 React 컴포넌트로 돌아가는 게 낫다고 결론 냈습니다.
+
+정리하면 이런 기준이 됐습니다.
+
+- 여러 프레임워크/프레임워크 없는 환경에 배포 — Web Components 적합
+- 한 앱 안의 화면 — 기존 프레임워크 유지
+- 그 중간(디자인 시스템 프리미티브) — Web Components + 각 프레임워크 래퍼, 단 React 19 이상이라면 래퍼 최소화
+
+## 마무리
+
+Web Components를 쓰면서 표준만으로도 컴포넌트라는 개념이 성립한다는 것, 그리고 프레임워크가 대신 해주던 일(선언적 렌더링, Diffing)이 얼마나 큰 편의였는지를 몸으로 느꼈습니다. 만능 대체제는 아니지만 "프레임워크를 가리지 않는 배포 단위"라는 자리에서는 확실히 빛났습니다. 다음에 비슷한 요구가 오면 먼저 컴포넌트의 복잡도를 가늠하고, 얕으면 Web Components, 깊으면 기존 도구를 고르는 순서로 판단하려 합니다.
+
+## 더 알아보기
+
+- MDN의 Web Components 가이드 — Custom Elements, Shadow DOM, 템플릿의 표준 동작을 확인할 수 있습니다.
+- React 공식 문서의 Custom Elements 관련 변경 내역 — React 19의 커스텀 엘리먼트 지원 개선 사항을 소개합니다.

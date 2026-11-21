@@ -1,0 +1,106 @@
+---
+title: 'Lighthouse CI로 성능 예산 지키기'
+date: '2025-10-07'
+description: '성능 예산을 코드에 강제하는 방법을 정리했습니다. Lighthouse CI 설정부터 PR을 막는 게이트까지 실무에서 쓰는 구성을 소개합니다.'
+tags: ['Performance', 'CI']
+---
+
+# Lighthouse CI로 성능 예산 지키기
+
+## 개요
+
+성능 최적화는 한번 해서 끝나는 작업이 아니었습니다. QA를 통과했던 페이지도 몇 주 만에 이미지 몇 장과 배너 스크립트 하나로 다시 느려졌고, "왜 이렇게 느려요?"라는 말을 들을 때면 원인을 다시 찾아야 했습니다. 이 글에서는 성능 예산(performance budget)을 문서가 아니라 CI 설정으로 강제해서, 성능이 나빠지는 변경이 메인 브랜치에 들어오지 못하게 만드는 방법을 정리합니다.
+
+## 성능 예산이란
+
+성능 예산은 페이지가 지켜야 할 정량 지표의 상한선입니다. 예를 들어 이런 식으로 정합니다.
+
+- LCP 2.5초 이하
+- JS 번들(초기 로드) 200KB(gzip) 이하
+- 이미지 총 1MB 이하
+
+핵심은 "빠르게 만들자"라는 막연한 목표가 아니라, 숫자로 합의된 선을 넘으면 병합을 못하게 만드는 것입니다. 예산은 Lighthouse가 측정하는 카테고리 점수(LCP, TBT, CLS 등)와 리소스 크기 두 가지 축으로 세우는 게 관리하기 쉽했습니다.
+
+## Lighthouse CI 설정
+
+Lighthouse CI는 Lighthouse 검사를 자동으로 돌려주는 도구입니다. 설정 파일 하나면 시작할 수 있습니다.
+
+```json
+// lighthouserc.json
+{
+  "ci": {
+    "collect": {
+      "staticDistDir": "./dist",
+      "numberOfRuns": 3
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": ["error", { "minScore": 0.9 }],
+        "largest-contentful-paint": ["error", { "maxNumericValue": 2500 }],
+        "cumulative-layout-shift": ["error", { "maxNumericValue": 0.1 }],
+        "total-byte-weight": ["warn", { "maxNumericValue": 1500000 }],
+        "unused-javascript": "warn"
+      }
+    }
+  }
+}
+```
+
+포인트를 짚으면 이렇습니다.
+
+- `numberOfRuns: 3` — 측정값의 변동이 커서 여러 번 돌린 중간값을 쓰는 편이 안정적이었습니다.
+- `error` 레벨은 실패, `warn`은 경고만 남깁니다. 처음부터 전부 error로 걸면 초반에 CI가 계속 빨간색이라 동료들 설득이 어려웠습니다.
+- 점수(0.9) 대신 지표 값(LCP 2500ms)으로 걸면 Lighthouse 버전이 바뀌어도 의미가 덜 흔들립니다.
+
+로컬에서는 `@lhci/cli`를 실행해 같은 설정으로 미리 확인할 수 있습니다.
+
+```bash
+npx @lhci/cli autorun
+```
+
+## PR을 막는 게이트 만들기
+
+설정만으로는 부족하고, 실제로 CI 파이프라인에 끼워 넣어야 예산이 됩니다. GitHub Actions에서는 공식 액션으로 간단히 연결됩니다.
+
+```yaml
+# .github/workflows/lighthouse.yml
+name: Lighthouse CI
+on:
+  pull_request:
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: ./lighthouserc.json
+          uploadArtifacts: true
+```
+
+이 워크플로우가 실패하면(성능 카테고리가 0.9 미만이거나 LCP가 2.5초를 넘으면) PR은 병합 보호 규칙에 걸려 막힙니다. 브랜치 보호 설정에서 이 워크플로우를 required check로 지정하는 것까지가 세트였습니다. 여기까지 해야 "예산"이 아니라 "권고"에 그치지 않습니다.
+
+한 가지 팁은 임시 저장(temporary public storage) 대신 자체 서버나 LHCI 서버로 리포트를 올리면 과거 추이도 볼 수 있다는 점입니다. 추이가 쌓이면 "원래 이 페이지는 1.8초였는데 이번 PR에서 3.2초가 됐다"처럼 리뷰 때 근거를 들 수 있어 설득이 훨씬 쉬워졌습니다.
+
+## 실패를 다루는 태도
+
+게이트를 만들고 나면 반드시 이 상황이 옵니다. 급한 기능 PR이 성능 예산에 걸리는 경우입니다. 처음엔 예산을 통과할 때까지 막는 게 원칙이라고 생각했지만, 실무에서는 몇 가지 예외 장치가 필요했습니다.
+
+- 라벨(예: `skip-performance-gate`)로 워크플로우를 건너뛰되, PR 설명에 성능 영향을 남기게 합니다.
+- 단계적 상향: 현재 LCP가 4초인 레거시 페이지에 2.5초 예산을 바로 걸면 아무것도 못 합니다. 3.8초에서 시작해 점점 내리는 방식이 현실적이었습니다.
+- 예산 위반은 자동으로 코멘트로 남겨서, 리뷰어가 수치를 열어보지 않아도 원인 라인(예: unused-javascript)을 볼 수 있게 합니다.
+
+## 마무리
+
+성능 예산의 핵심은 도구가 아니라 "숫자로 합의된 선을 CI가 지키게 한다"는 구조였습니다. Lighthouse CI 설정 파일 하나, GitHub Actions 워크플로우 하나, 브랜치 보호 규칙 하나. 이 세 가지로 저희 팀은 성능 논쟁을 "느린 것 같은데?"에서 "LCP가 800ms 나빠졌네, 이미지 사이즈부터 볼까?"로 바꿀 수 있었습니다. 처음 도입할 때는 기준을 너무 빡빡하게 잡지 않는 것, 그리고 실패했을 때 대화가 이어질 장치를 함께 만드는 것이 중요했습니다.
+
+## 더 알아보기
+
+- Lighthouse CI 공식 문서의 assertions 설정 — 커스텀 예산의 전체 옵션을 확인할 수 있습니다.
+- web.dev의 성능 예산 가이드 — 예산 수치를 정할 때 참고할 만한 기준들을 소개합니다.

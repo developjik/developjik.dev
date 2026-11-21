@@ -1,0 +1,118 @@
+---
+title: '렌더링 전략 다시 정리: CSR/SSR/SSG/ISR'
+date: '2025-11-25'
+description: 'CSR, SSR, SSG, ISR을 TTFB와 FCP 관점에서 다시 정리하고, 프로젝트에서 어떤 기준으로 전략을 골랐는지 정리했습니다.'
+tags: ['Rendering', 'Next.js']
+---
+
+# 렌더링 전략 다시 정리: CSR/SSR/SSG/ISR
+
+## 개요
+
+"이 페이지는 SSR로 해야 할까요?"라는 질문에 매번 말이 길어지는 것 같아 한 번 정리해두기로 했습니다. CSR, SSR, SSG, ISR은 각각 "어디서, 언제 HTML을 만드는가"의 차이일 뿐이고, 정확히는 요청-렌더링 타이밍의 스펙트럼 위에 있습니다. 이 글에서는 각 전략의 동작과 트레이드오프를 TTFB(첫 바이트까지 시간)와 FCP(첫 콘텐츠 페인트) 관점에서 정리하고, 실제 프로젝트에서 골랐던 기준을 공유합니다.
+
+## CSR: 클라이언트가 그린다
+
+CSR(Client-Side Rendering)은 서버가 거의 빈 HTML을 내려주고, 브라우저가 JS를 실행해 화면을 만드는 방식입니다.
+
+```jsx
+function App() {
+  const [items, setItems] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/items')
+      .then((r) => r.json())
+      .then(setItems);
+  }, []);
+
+  if (!items) return <p>로딩 중...</p>;
+  return <ul>{items.map((i) => <li key={i.id}>{i.name}</li>)}</ul>;
+}
+```
+
+- TTFB는 매우 빠릅니다. 서버가 할 일이 정적 파일 반환뿐이라 CDN에서 종단되기 때문입니다.
+- FCP는 늦어집니다. JS 번들을 내려받고 파싱·실행한 뒤에 데이터 페치가 시작되는 물줄이 직렬로 이어집니다.
+- 검색 엔진 최적화가 필요 없는 관리자 도구나 로그인 뒤 앱 성격의 화면에서는 여전히 합리적 선택이었습니다. 호스팅 비용도 거의 들지 않습니다.
+
+## SSR: 요청 시점에 서버가 그린다
+
+SSR(Server-Side Rendering)은 요청이 올 때마다 서버가 완성된 HTML을 만들어 반환합니다. Next.js App Router에서는 동적 렌더링이 이에 해당합니다.
+
+```tsx
+// Next.js App Router — 요청마다 서버에서 실행
+export default async function ProductPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const product = await getProduct(id); // 서버에서 데이터 페치
+
+  return <h1>{product.name}</h1>;
+}
+```
+
+- FCP가 빨라집니다. 데이터가 이미 반영된 HTML이 오기 때문에 빈 화면 없이 첫 페인트가 나옵니다.
+- TTFB는 서버 작업(데이터 페치 + 렌더)만큼 늘어납니다. 원본이 느리면 페이지 TTFB도 느려지는 직렬 구조라는 점이 함정이었습니다.
+- 요청 시점의 최신 데이터가 필요한 상품 상세, 검색 결과, 대시보드 첫 화면에 적합했습니다.
+- 비용 측면에서 SSR은 서버가 계속 살아 있어야 합니다. 트래픽이 몰리면 렌더 부하가 그대로 서버 부하가 됩니다.
+
+## SSG: 빌드 시점에 다 그려둔다
+
+SSG(Static Site Generation)는 빌드할 때 HTML을 미리 만들어 두고 요청은 정적 파일로 응답합니다. 이 블로그도 이 방식입니다.
+
+```tsx
+// Next.js — 빌드 시점에 실행
+export const dynamic = 'force-static';
+
+export function generateStaticParams() {
+  return posts.map((post) => ({ slug: post.slug }));
+}
+
+export default async function PostPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const post = await getPost(slug);
+  return <article>{post.content}</article>;
+}
+```
+
+- TTFB·FCP 모두 가장 빠릅니다. CDN 캐시에서 바로 내려주기 때문입니다.
+- 데이터는 빌드 시점에 갱신됩니다. 하루 전 데이터가 보여도 되는 브로그, 소개 페이지, 문서에는 문제가 없지만, 재고나 가격처럼 실시간성이 필요한 곳에는 쓸 수 없습니다.
+- 콘텐츠를 고치려면 재빌드가 필요합니다. 배포 파이프라인이 자주 도는 팀이면 병목이 없었지만, 배포가 무거운 팀에서는 이 비용이 꽤 컸습니다.
+
+## ISR: 오래된 것을 다시 그린다
+
+ISR(Incremental Static Regeneration)은 SSG의 정적 응답을 유지하면서, 설정한 주기로 백그라운드 재생성을 하는 절충안입니다.
+
+```tsx
+// Next.js — 60초 주기로 재생성
+export const revalidate = 60;
+
+export default async function ProductsPage() {
+  const products = await getProducts();
+  return <ProductList products={products} />;
+}
+```
+
+동작이 재미있는 부분은 "요청이 오면 오래된 페이지를 먼저 주고, 백그라운드에서 새로 그린다"는 점입니다. 그래서 응답 속도는 정적 파일급을 유지하면서 데이터 신선함을 주기적으로 확보합니다. 저희는 상품 목록처럼 "수 초~수 분 지연은 허용되지만 빠른 응답이 중요한" 페이지에 ISR을 썼습니다. 최신성이 절대적인 순간(결제 직전 가격 등)에는 SSR이나 클라이언트 페치로 확인하는 계층을 나눴습니다.
+
+Next.js 15부터는 요청 단위로 캐시를 무효화하는 방식(Cache Components, `cacheComponents` 실험 옵션과 세분화된 무효화)으로 접근이 바뀌고 있어, 시간 기반 revalidate 외에도 태그 기반 무효화(`revalidateTag`)를 곁들이는 경우가 많아졌습니다.
+
+## 고르는 기준
+
+결국 세 가지 질문으로 수렴했습니다.
+
+1. **데이터가 요청 시점에 최신이어야 하는가?** — 그렇다면 SSR(또는 클라이언트 페치). 아니라면 2번으로.
+2. **콘텐츠 변경 빈도는?** — 거의 안 바뀌면 SSG, 주기적으로 바뀌어도 되면 ISR.
+3. **SEO와 첫 페인트가 중요한가?** — 중요하면 서버에서 그린 HTML(SSR/SSG/ISR), 아니면 CSR도 충분.
+
+그리고 이 선택은 페이지 단위로 하면 됩니다. Next.js 앱 하나 안에서 마케팅 페이지는 SSG, 상품 페이지는 ISR, 검색은 SSR, 설정 화면은 CSR로 섞어 쓰는 것이 오히려 기본이었습니다. "이 프로젝트는 SSR 프로젝트입니다"처럼 앱 전체를 하나로 묶는 프레임이 토론을 자주 꼬이게 했습니다.
+
+## 마무리
+
+렌더링 전략은 정답이 아니라 트레이드오프의 선택이었습니다. TTFB를 사면 FCP를 얻고(SSR), 최신성을 사면 서버 비용을 얻고(SSR vs SSG), 편의를 사면 초기 물줄기를 늘인다(CSR). 각 전략이 정확히 어느 시점에 HTML을 만드는지만 정확히 알면 나머지는 요구사항에 대한 답으로 자연스럽게 정리됐습니다. 다음에 또 "SSR 해야 할까요?"라는 질문을 받으면, 그 페이지의 데이터 신선도와 첫 페인트 요구를 먼저 묻는 것부터 시작하려 합니다.
+
+## 더 알아보기
+
+- Next.js 공식 문서의 렌더링 섹션 — App Router에서 정적/동적 렌더링과 ISR, 캐시 무효화 동작을 확인할 수 있습니다.
+- web.dev의 Rendering on the web — 서버/정적/하이브리드 렌더링 스펙트럼을 원론적으로 정리한 글입니다.

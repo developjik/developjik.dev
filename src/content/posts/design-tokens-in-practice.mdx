@@ -1,0 +1,87 @@
+---
+title: '디자인 토큰으로 디자인-개발 협업하기'
+date: '2025-06-17'
+description: '디자인 토큰을 3계층으로 나누고 CSS 변수로 구현해 다크모드 전환까지 자동화한 과정을 정리합니다.'
+tags: ['Design System', 'Tokens']
+---
+
+# 디자인 토큰으로 디자인-개발 협업하기
+
+## 개요
+
+디자이너에게 "이 색이 뭐예요?"라고 물을 때마다 스레드를 오가는 시간이 아까워서 디자인 토큰을 도입했습니다. 토큰이란 색상, 간격, 타이포그래피 같은 디자인 결정을 "이름 붙은 값"으로 정의한 것입니다. `#3B82F6`이 아니라 `color.action.primary`를 쓰면, 값이 바뀌어도 코드를 일일이 고칠 필요가 없습니다.
+
+## 토큰을 3계층으로 나누기
+
+처음에는 색상 값을 그대로 변수화했는데, 버튼 배경과 링크 색이 똑같은 파랑이라서 하나만 바꾸기 어려웠습니다. 그래서 일반적인 3계층 구조로 재정비했습니다.
+
+1. **원시 토큰(Primitive)**: `blue-500: #3B82F6`처럼 값 그 자체
+2. **시맨틱 토큰(Semantic)**: `color.action.primary`처럼 "역할"을 나타냄
+3. **컴포넌트 토큰(Component)**: `button.primary.background`처럼 컴포넌트 범위로 한정
+
+```json
+{
+  "color": {
+    "blue": { "500": { "value": "#3B82F6" } },
+    "action": { "primary": { "value": "{color.blue.500}" } }
+  }
+}
+```
+
+시맨틱 계층에서 원시 토큰을 참조하도록 하면, 브랜드 컬러 전체를 바꿀 때 원시 토큰만 수정하면 됩니다.
+
+## CSS 변수로 구현하기
+
+Style Dictionary 같은 도구로 빌드해도 되지만, 저는 먼저 CSS 커스텀 프로퍼티로 직접 구성해보며 감을 잡았습니다.
+
+```css
+:root {
+  /* primitive */
+  --blue-500: #3b82f6;
+  --gray-900: #111827;
+
+  /* semantic */
+  --color-action-primary: var(--blue-500);
+  --color-text-default: var(--gray-900);
+}
+
+.button--primary {
+  background: var(--color-action-primary);
+  color: var(--color-text-default);
+}
+```
+
+컴포넌트는 시맨틱 토큰만 참조하게 규칙을 정했습니다. 원시 값을 컴포넌트에 직접 쓰는 순간 토큰 체계가 무너지기 때문입니다.
+
+## 다크모드 전환
+
+다크모드는 테마별로 시맨틱 토큰의 값을 다르게 매핑하는 방식으로 해결했습니다.
+
+```css
+:root {
+  --color-surface: #ffffff;
+  --color-text-default: #111827;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-surface: #111827;
+    --color-text-default: #f9fafb;
+  }
+}
+
+[data-theme='dark'] {
+  --color-surface: #111827;
+  --color-text-default: #f9fafb;
+}
+```
+
+미디어 쿼리는 시스템 설정을 따르고, `data-theme` 속성은 사용자가 직접 테마를 고를 때 사용합니다. 컴포넌트 코드는 전혀 건드리지 않고 테마만 바뀌는 것이 이 구조의 가장 큰 장점이었습니다.
+
+## 협업 워크플로우 만들기
+
+토큰 정의 JSON을 디자이너와 함께 단일 소스로 삼았습니다. Figma의 Variables를 토큰으로 내보내는 플러그인도 있어서, 디자인 쪽 변수명과 코드의 시맨틱 토큰 이름을 맞춰두니 서로 "다크모드에서 이 버튼은 뭐예요?" 같은 질문이 눈에 띄게 줄었습니다.
+
+## 마무리
+
+디자인 토큰은 도구보다 "이름 규칙"이 핵심이었습니다. 3계층 구조로 역할을 분리하고, 컴포넌트는 시맨틱 토큰만 참조하게 하니 다크모드와 리브랜딩 모두 CSS 변수 매핑만으로 해결됐습니다. 작게 시작해서 점진적으로 계층을 쌓는 것을 추천합니다.

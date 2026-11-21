@@ -1,0 +1,140 @@
+---
+title: 'Vitest로 시작하는 프론트엔드 테스트'
+date: '2025-03-04'
+description: 'Jest 대신 Vitest를 선택한 이유와 첫 유닛 테스트 작성, jsdom 환경 설정, 목(mock) 처리까지 실무 관점으로 정리했습니다.'
+tags: ['Testing', 'Vitest']
+---
+
+# Vitest로 시작하는 프론트엔드 테스트
+
+## 개요
+
+프로젝트에 테스트가 없다는 이유만으로 코드 리뷰에서 "이거 건드려도 되는지 모르겠다"는 말이 나온 적이 있습니다. 이번 글에서는 Vitest를 시작하는 방법을 정리합니다. Vite 생태계에서 태어난 Vitest는 설정이 거의 필요 없고 속도도 빨라서, 프론트엔드에서 테스트를 "처음" 붙이는 도구로 꽤 좋은 선택이라고 생각합니다.
+
+## 왜 Vitest인가
+
+Jest를 써보신 분이라면 설정의 번거로움을 기억할 겁니다. TypeScript, ESM, JSX를 다 돌리려면 `ts-jest`, `babel-jest`, `transformIgnorePatterns`를 오가며 삽질하게 됩니다. Vitest는 Vite의 설정과 변환 파이프라인을 그대로 재사용합니다. `vite.config.ts`에 있는 별칭(alias)이나 플러그인이 테스트에서도 동일하게 동작하니 "개발 서버에서는 되는데 테스트에서는 안 되는"류의 문제가 줄어듭니다.
+
+속도도 장점입니다. Vitest는 기본적으로 병렬 워커로 테스트를 실행하고, Watch 모드에서는 변경된 모듈과 그것에 의존하는 테스트만 다시 실행합니다. 파일이 많아질수록 체감 차이가 커집니다. API는 Jest와 상당히 호환되어서 `describe`, `it`, `expect` 그대로 쓸 수 있고, `vi.fn()`이 `jest.fn()`에 대응합니다.
+
+## 첫 유닛 테스트
+
+설치는 간단합니다.
+
+```bash
+npm install -D vitest
+```
+
+순수 함수 하나를 테스트해 봅니다.
+
+```typescript
+// src/utils/price.ts
+export function formatPrice(value: number): string {
+  if (!Number.isFinite(value)) {
+    throw new Error('유효한 숫자를 입력하세요');
+  }
+  return new Intl.NumberFormat('ko-KR', {
+    style: 'currency',
+    currency: 'KRW',
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+```
+
+```typescript
+// src/utils/price.test.ts
+import { describe, it, expect } from 'vitest';
+import { formatPrice } from './price';
+
+describe('formatPrice', () => {
+  it('원화 포맷으로 변환한다', () => {
+    expect(formatPrice(1234567)).toBe('1,234,567원');
+  });
+
+  it('소수점은 버린다', () => {
+    expect(formatPrice(1000.9)).toBe('1,000원');
+  });
+
+  it('유효하지 않은 입력은 예외를 던진다', () => {
+    expect(() => formatPrice(NaN)).toThrow('유효한 숫자를 입력하세요');
+  });
+});
+```
+
+`package.json`에 스크립트를 추가하고 실행하면 끝입니다.
+
+```json
+{
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  }
+}
+```
+
+테스트의 단위는 "구현"이 아니라 "동작"입니다. 내부 로직을 하나하나 검증하는 테스트는 리팩터링을 어렵게 만들고, 입력에 대한 출력을 검증하는 테스트는 오래 살아남습니다.
+
+## jsdom 환경 설정
+
+DOM API가 필요한 테스트, 예를 들어 `localStorage`를 쓰는 훅을 테스트하려면 브라우저 유사 환경이 필요합니다. Vitest는 `environment` 옵션으로 이를 해결합니다.
+
+```typescript
+// vitest.config.ts
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test-setup.ts'],
+  },
+});
+```
+
+`happy-dom`을 쓸 수도 있는데, jsdom보다 가볍고 빠른 대신 표준 구현 범위가 좁습니다. 저는 호환성이 중요한 통합 테스트는 jsdom, 단순 컴포넌트 테스트는 happy-dom으로 나눠 쓰기도 했습니다. 파일 단위로 바꾸고 싶다면 주석으로 지정할 수 있습니다.
+
+```typescript
+// @vitest-environment happy-dom
+import { it, expect } from 'vitest';
+
+it('happy-dom에서 DOM을 조회한다', () => {
+  document.body.innerHTML = '<button>클릭</button>';
+  expect(document.querySelector('button')?.textContent).toBe('클릭');
+});
+```
+
+## 목(mock) 처리
+
+네트워크 호출이나 타이머가 섞인 코드는 그대로 테스트하면 느리고 불안정해집니다. Vitest는 `vi` 객체로 목 처리를 제공합니다.
+
+```typescript
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { loadUserProfile } from './user';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('loadUserProfile', () => {
+  it('API 응답을 정규화해서 반환한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ user_name: 'developjik', user_email: 'a@b.com' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const profile = await loadUserProfile();
+
+    expect(profile).toEqual({ name: 'developjik', email: 'a@b.com' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+```
+
+`vi.stubGlobal`은 전역 객체를 임시로 교체하고, `vi.restoreAllMocks()`가 원복을 책임집니다. 타이머가 필요하면 `vi.useFakeTimers()`와 `vi.advanceTimersByTime()` 조합으로 시간을 조작할 수 있습니다.
+
+목을 쓰는 경계선도 정리해 두면 좋습니다. 저는 외부 세계(네트워크, 시간, 랜덤)는 목으로 처리하고, 검증 대상 로직 자체는 목으로 바꾸지 않습니다. 검증 대상까지 목으로 바꾸면 테스트는 초록색인데 실제로는 깨진 상황이 생깁니다.
+
+## 마무리
+
+Vitest의 장점을 한 줄로 요약하면 "Vite로 만든 프로젝트에서 테스트를 위해 새로 배우거나 설정할 것이 적다"입니다. 순수 함수 유닛 테스트로 시작해 jsdom 환경에서 DOM 의존 로직을 붙이고, 외부 의존성은 `vi`로 목 처리하는 흐름만 기억하면 됩니다. 다음 글에서는 Testing Library를 붙여서 컴포넌트 테스트까지 확장해 보겠습니다.
