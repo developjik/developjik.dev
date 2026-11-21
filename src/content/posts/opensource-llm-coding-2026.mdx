@@ -1,0 +1,122 @@
+---
+title: '2026년 오픈소스 코딩 LLM 실전 — GLM·Qwen·DeepSeek 중심으로'
+date: '2026-08-08'
+description: '2025년 7월 Qwen3-Coder에서 2026년 7월 DeepSeek-V4-Flash까지, 오픈소스 코딩 LLM 1년 반의 계보를 정리합니다. 라이선스와 벤치마크 해석, 로컬 실행 산수, API 가격, 작업 유형별 선택 기준을 담은 실전 분석 노트입니다.'
+tags: ['LLM', '코딩 에이전트', '오픈소스', 'GLM', 'Qwen', 'DeepSeek']
+---
+
+# 2026년 오픈소스 코딩 LLM 실전 — GLM·Qwen·DeepSeek 중심으로
+
+2025년 7월 [Qwen3-Coder](https://qwenlm.github.io/blog/qwen3-coder)가 공개된 뒤 1년이 조금 넘는 사이 오픈소스 코딩 LLM의 지형이 완전히 바뀌었습니다. GLM은 4.6에서 [GLM-5.2](https://docs.z.ai/release-notes/new-released)까지 다섯 단계를 밟았고, DeepSeek은 V3을 정리하고 [V4 프리뷰](https://deepseek.com/en/news/v4-preview/)로 세대를 옮겼으며, Qwen은 Qwen3.5와 [Qwen3-Coder-Next](https://arxiv.org/abs/2603.00729)로 후속을 이어갔습니다. 문제는 이제 "뭐가 제일 좋냐"가 아니라 "이 작업에는 무엇을 얼마나 쓸 것인가"입니다. 제가 블로그와 사이드 프로젝트에 적용해 온 기준을 계보, 라이선스, 벤치마크, 로컬 실행, 가격 순으로 정리합니다.
+
+## 1년 반의 계보: 세 팀이 걸어온 글
+
+날짜는 모두 공식 발표 기준입니다.
+
+| 시점 | 모델 | 요점 |
+| --- | --- | --- |
+| 2025-07-22 | [Qwen3-Coder-480B-A35B](https://qwenlm.github.io/blog/qwen3-coder) | 480B MoE(활성 35B), 256K 컨텍스트(YaRN으로 1M), Apache-2.0 |
+| 2025-07-31 | Qwen3-Coder-30B-A3B | 활성 3.4B 소형 MoE, 로컬 실전 배치의 시작 |
+| 2025-08-21 | [DeepSeek-V3.1](https://api-docs.deepseek.com/updates) | 하이브리드 추론, SWE-bench Verified 66.0 |
+| 2025-09-29 | [DeepSeek-V3.2-Exp](https://www.deepseek.com/en/news/v3-2-exp) | DeepSeek Sparse Attention(DSA) 도입, API 가격 50%+ 인하 |
+| 2025-09-30 | [GLM-4.6](https://z.ai/blog/glm-4.6) | 355B MoE, 200K 컨텍스트, MIT 라이선스 |
+| 2025-12-01 | [DeepSeek-V3.2](https://deepseek.com/en/news/deepseek-v3-2/) | 도구 호출에 추론 통합(thinking in tool-use) |
+| 2025-12-22 | [GLM-4.7](https://z.ai/blog/glm-4.7) | SWE-bench Verified 73.8%(4.6 대비 +5.8%p) |
+| 2026-02-12 | [GLM-5](https://docs.z.ai/release-notes/new-released) | 코딩에서 시스템 엔지니어링으로 중심 이동, DSA 채택 |
+| 2026-02-28 | [Qwen3-Coder-Next 기술 보고서](https://arxiv.org/abs/2603.00729) | 차세대 코딩 모델 방향 제시 |
+| 2026-04-24 | [DeepSeek-V4 프리뷰](https://deepseek.com/en/news/v4-preview/) | V4-Pro 1.6T(활성 49B)·V4-Flash 284B(활성 13B), 1M 컨텍스트 기본 |
+| 2026-06-16 | GLM-5.2 | 1M 무손실 컨텍스트, 장기 과제 안정성 |
+| 2026-07-31 | [DeepSeek-V4-Flash 정식 API](https://api-docs.deepseek.com/updates) | Terminal-Bench 2.1 82.7, DeepSWE 54.4 |
+
+포인트는 두 가지입니다. 첫째, 세 팀 모두 "더 큰 모델"이 아니라 "더 긴 컨텍스트 + 더 오래 도는 에이전트"로 방향을 옮겼습니다. Qwen3-Coder의 256K, GLM-5.2의 1M, DeepSeek-V4의 "1M 기본"은 같은 방향의 다른 표현입니다. 둘째, 기술이 서로 이식됩니다. GLM-5는 DeepSeek이 V3.2-Exp에서 선보인 [Sparse Attention을 통합](https://docs.z.ai/release-notes/new-released)했다고 공식 기록했습니다.
+
+## 라이선스: MIT와 Apache-2.0, 실무에서 의미하는 것
+
+- GLM-4.6·GLM-4.7: [MIT 라이선스](https://huggingface.co/zai-org/GLM-4.6)
+- Qwen3-Coder: [Apache-2.0](https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct)
+- DeepSeek-V3.2: [MIT 라이선스](https://huggingface.co/deepseek-ai/DeepSeek-V3.2)
+
+셋 다 상업 이용, 수정, 재배포가 가능한 느슨한 라이선스라 "회사 서비스에 써도 되는가"에는 모두 예가 정답이고, 남는 차이는 기여 규약과 상표 정도입니다. 다만 웨이트만 공개되고 학습 데이터·코드는 닫혀 있다는 점에서 엄격한 OSS 정의와는 다르다는 논쟁이 늘 따라다닙니다. 실무적으로는 "오픈 웨이트 모델"이라 부르는 쪽이 오해가 적습니다.
+
+## 벤치마크를 읽는 눈: SWE-bench Verified와 그 한계
+
+코딩 모델 비교에서 가장 많이 인용되는 [SWE-bench Verified](https://openai.com/index/introducing-swe-bench-verified)는 실제 GitHub 이슈 500개를 사람이 검증해 만든 벤치마크입니다. 오픈소스 진영의 흐름을 이 숫자로만 요약하면 이렇습니다.
+
+- Qwen3-Coder-480B: 69.6%(OpenHands 스캐폴드 기준, [Qwen 발표](https://qwenlm.github.io/blog/qwen3-coder))
+- GLM-4.6: 68.0%([z.ai 발표](https://z.ai/blog/glm-4.6))
+- GLM-4.7: 73.8%([z.ai 발표](https://z.ai/blog/glm-4.7))
+- DeepSeek-V3.1: 66.0%([DeepSeek 체인지로그](https://api-docs.deepseek.com/updates))
+
+다만 이 표를 순위표로 읽으면 안 됩니다. 같은 모델도 스캐폴드(OpenHands, mini-SWE-agent 등)와 턴 예산에 따라 점수가 달라지고, 2026-02에는 [OpenAI가 "SWE-bench Verified를 더 이상 평가하지 않는 이유"](https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/)라는 글로 데이터 오염과 한계를 공식 지적했습니다. 실제로 2026년 들어 새 모델 발표의 헤드라인 지표는 Terminal-Bench나 DeepSWE처럼 터미널·저장소 단위 실무에 가까운 벤치로 다양화되고 있습니다. 제 결론은 이렇습니다. 벤치마크는 명백히 뒤처진 모델을 거르는 거름망으로 쓰고, 최종 선택은 내 코드베이스에서 소수 후보를 직접 돌려본 결과로 내리는 것입니다.
+
+## 로컬 실행: 양자화 산수와 현실적인 선택지
+
+로컬 실행은 산수부터 하면 됩니다.
+
+```text
+필요한 메모리(GB) ≈ 파라미터 수(B) × 양자화 비트 ÷ 8
+예) 30B × 4.8비트(Q4_K_M급) ÷ 8 ≈ 18GB (KV 캐시·오버헤드 별도)
+```
+
+이 산수에 계보를 대입하면 선택지가 명확해집니다.
+
+- **Qwen3-Coder-30B-A3B** — Q4 계열 양자화로 약 19~20GB. 24GB 소비자 GPU 한 장이면 돌아갑니다. [Unsloth 로컬 가이드](https://unsloth.ai/docs/models/tutorials/qwen3-coder-how-to-run-locally)가 30B와 480B 양쪽을 다룹니다.
+- **GLM-4.6(355B)** — 원본 약 400GB, Unsloth dynamic 2-bit로 135GB까지 줄어들지만([가이드](https://site.unsloth.ai/docs/models/tutorials/glm-4.6-how-to-run-locally.md)) 워크스테이션 급 예산이고 속도도 포기해야 합니다.
+- **Qwen3-Coder-480B·DeepSeek-V4-Flash(284B)** — 양자화해도 수백 GB입니다. 로컬은 실험, 실전은 API가 현실적입니다.
+
+```bash
+# 24GB급 GPU 한 대로 도는 로컬 코딩 모델
+ollama run qwen3-coder:30b
+
+# 대형을 굳이 로컬에서: GLM-4.6 2-bit dynamic quant (≈135GB 스토리지)
+llama-server -hf unsloth/GLM-4.6-GGUF:UD-Q2_K_XL --port 8080
+```
+
+로컬 실행의 진짜 가치는 비용이 아니라 "코드가 외부로 나가지 않는다"와 "레이트 리밋이 없다"입니다. 저는 둘을 석 달쯤 병행하다가, 일상 작업은 API + 캐시, 오프라인 실험만 로컬로 정착했습니다.
+
+## API 가격: 싸진 만큼 따져야 할 것들
+
+에이전트 워크로드는 왕복이 많아 실비용이 표면 가격과 다릅니다. 2026-08 기준 대표적인 공식 가격은 다음과 같습니다.
+
+- DeepSeek: V3.2-Exp 발표 때 입력(캐시 미스) $0.28·출력 $0.42/1M 토큰으로 50% 넘게 인하([발표](https://www.deepseek.com/en/news/v3-2-exp), [가격 페이지](https://api-docs.deepseek.com/quick_start/pricing)). 캐시 히트 입력은 $0.028입니다.
+- Qwen3-Coder-480B: 입력 $0.30·출력 $1.00/1M 토큰([Alibaba Cloud Model Studio 과금 안내](https://www.alibabacloud.com/help/en/model-studio/billing)).
+- GLM-4.7: 입력 $0.60·출력 $2.20/1M 토큰([Z.ai 요금](https://docs.z.ai/guides/overview/pricing)).
+
+주의할 점 두 가지입니다. 첫째, 에이전트는 같은 컨텍스트를 반복 전송하므로 프롬프트 캐싱 지원 여부가 총비용을 갈랍니다. 둘째, 가격은 자주 바뀌므로(DeepSeek-V4 발표 때도 조정이 예고됐습니다) 도입 검토 시점에 공식 페이지를 다시 확인해야 합니다.
+
+## 제 실전 기준: 검증 많은 작업은 소형, 설계는 대형
+
+제가 블로그 플랫폼 개선과 사이드 프로젝트에서 몇 달간 잡은 룰입니다. 단순하지만 잘 들어맞았습니다.
+
+1. **검증 루프가 촘촘한 작업은 소형** — 리팩터링, 의존성 업그레이드, 테스트 보강처럼 빌드·타입·테스트가 정답을 확인해 주는 작업은 30B급 로컬 모델이나 플래시급 API로도 충분합니다. 실패해도 루프가 잡아주므로 빠르고 싼 쪽이 이깁니다.
+2. **설계·탐색형 작업은 대형** — 아키텍처 결정, 낯선 버그의 원인 좁히기, 요구사항을 코드 구조로 옮기는 작업은 중간 피드백이 약합니다. 한 번의 시도 품질이 중요하므로 컨텍스트가 길고 추론이 강한 대형(GLM-5.x, DeepSeek-V4, Qwen3.5급)을 씁니다.
+3. **경계에 있으면 먼저 소형으로 스켈레톤** — 큰 기능은 소형으로 뼈대와 테스트를 만든 뒤 대형에 넘겨 완성도를 올리는 순서가 비용 대비 효율이 좋았습니다.
+
+이 기준의 뿌리는 "검증 가능성"입니다. 검증이 많은 작업일수록 모델 실수의 폐해가 작으므로 비용을 최적화하고, 검증이 드문 작업일수록 1회 품질에 투자합니다.
+
+## 체크리스트
+
+- [ ] 도입 시점에 공식 가격·모델명을 다시 확인했는가 (이 글의 가격은 2026-08 기준)
+- [ ] 웨이트 라이선스를 저장소에서 직접 확인했는가
+- [ ] 벤치마크 점수의 스캐폴드·턴 예산 조건을 함께 봤는가
+- [ ] 에이전트 워크로드라면 프롬프트 캐싱 지원 여부를 확인했는가
+- [ ] 로컬 VRAM 산수(파라미터 × 비트 ÷ 8 + KV 캐시)를 먼저 계산했는가
+- [ ] 소형 도입 시 내 코드베이스에서 스모크 테스트를 돌려봤는가
+
+## 마치기
+
+오픈소스 코딩 LLM은 "쓸 수 있느냐"의 질문을 지나 "어떻게 나눠 쓸 것인가"의 질문에 들어왔습니다. 계보가 보여주는 방향(긴 컨텍스트, 장기 에이전트, 희소 어텐션)은 앞으로도 유효할 것입니다. 중요한 것은 벤치마크 순위가 아니라, 내 작업의 검증 밀도에 맞춰 모델 크기와 비용을 배분하는 판단입니다.
+
+## 레퍼런스
+
+- [Qwen3-Coder: Agentic Coding in the World](https://qwenlm.github.io/blog/qwen3-coder) — 2025-07-22 공식 발표
+- [GLM-4.6 발표](https://z.ai/blog/glm-4.6) — 2025-09-30, 200K 컨텍스트
+- [GLM-4.7 발표](https://z.ai/blog/glm-4.7) — 2025-12-22, SWE-bench Verified 73.8%
+- [Introducing DeepSeek-V3.2-Exp](https://www.deepseek.com/en/news/v3-2-exp) — 2025-09-29, DSA와 가격 인하
+- [DeepSeek-V4 Preview](https://deepseek.com/en/news/v4-preview/) — 2026-04-24, 1M 컨텍스트 시대
+- [DeepSeek API Change Log](https://api-docs.deepseek.com/updates) — V3.1부터 V4-Flash까지 공식 타임라인
+- [Introducing SWE-bench Verified](https://openai.com/index/introducing-swe-bench-verified) — 검증된 500과제 서브셋의 정의
+- [Why we no longer evaluate SWE-bench Verified](https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/) — 2026-02, 오염 문제 지적
+- [Qwen3-Coder 로컬 실행 가이드](https://unsloth.ai/docs/models/tutorials/qwen3-coder-how-to-run-locally) — Unsloth 양자화 안내
+- [Z.ai Pricing](https://docs.z.ai/guides/overview/pricing) — GLM 계열 공식 요금표
+- [Alibaba Cloud Model Studio 과금 안내](https://www.alibabacloud.com/help/en/model-studio/billing) — Qwen 계열 공식 요금표

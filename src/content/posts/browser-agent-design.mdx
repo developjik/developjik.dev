@@ -1,0 +1,171 @@
+---
+title: '브라우저 에이전트 설계 — Playwright·CDP 위에 자율 주행 올리기'
+date: '2026-08-22'
+description: '브라우저 에이전트의 지각 계층을 DOM 대신 접근성 트리로 잡는 이유와, CDP·Playwright 계층 위에 액션·대기·검증·실패 처리 루프를 얹는 설계를 정리했습니다. 에이전트를 만드는 쪽에서의 실전 플레이북입니다.'
+tags: ['브라우저 에이전트', 'Playwright', 'CDP', '접근성', 'MCP', '자동화']
+---
+
+# 브라우저 에이전트 설계 — Playwright·CDP 위에 자율 주행 올리기
+
+2024년 10월 [Anthropic이 computer use를 공개](https://www.anthropic.com/news/3-5-models-and-computer-use)한 뒤, "LLM이 브라우저를 쓴다"는 구현은 두 갈래로 갈렸습니다. 스크린샷을 보고 좌표를 찍는 쪽과, 구조를 읽고 요소를 다루는 쪽입니다. 저는 사이드 프로젝트의 반복 웹 작업 자동화에 후자, 그중에서도 접근성 트리를 지각 계층으로 쓰는 설계를 썼습니다. 이 글은 그 설계의 플레이북이며, 웹사이트가 아니라 에이전트를 만드는 쪽만 다룹니다.
+
+## 문제 정의: 매크로와 에이전트의 차이는 '지각'이다
+
+자동화 스크립트는 경로와 셀렉터를 미리 정해 둡니다. 에이전트는 매 스텝 관찰하고, 판단하고, 행동합니다. 그래서 성능의 상한은 모델 추론이 아니라 **지각의 품질**에서 먼저 결정됩니다. 지각이 노이즈하면 좋은 모델도 환각에 기반한 클릭을 반복합니다. 첫 설계 결정은 "에이전트에게 페이지를 어떻게 보여줄 것인가"입니다.
+
+## 왜 DOM이 아니라 접근성 트리인가
+
+DOM은 문서이자 렌더링 명세입니다. 반면 접근성 트리는 스크린리더를 위해 브라우저가 DOM에서 뽑아낸 **의미 모델**입니다([What is the accessibility tree?](https://developer.chrome.com/blog/full-accessibility-tree)). 에이전트 입장에서 유리한 이유는 세 가지입니다.
+
+1. **토큰 효율** — 수천 노드의 div와 인라인 스타일 대신 role·name·state만 남습니다. 매 스텝 페이지를 다시 보내야 하는 에이전트에서 비용·지연 차이로 직결됩니다.
+2. **결정성** — CSS 리팩터링으로 DOM 구조가 바껴도 "button '로그인'"은 그대로 남습니다.
+3. **행동 가능성** — 트리의 각 노드는 이미 상호작용 단위입니다. 이름과 역할이 곧 액션의 대상이 됩니다.
+
+이 선택은 도구의 기본이 되었습니다. Playwright는 [role 기반 조회를 최우선](https://playwright.dev/docs/locators)으로 안내하고, v1.49부터 [`locator.ariaSnapshot()`](https://playwright.dev/docs/aria-snapshots)으로 접근성 트리를 YAML로 뽑습니다.
+
+```ts
+import { chromium } from 'playwright';
+
+const browser = await chromium.launch();
+const page = await browser.newPage();
+await page.goto('https://example.com/login');
+
+// 페이지의 지각 결과: 접근성 트리의 YAML 표현
+console.log(await page.locator('body').ariaSnapshot());
+// - main:
+//   - textbox "이메일"
+//   - textbox "비밀번호"
+//   - button "로그인"
+```
+
+에이전트 루프는 이 스냅샷을 모델에 넘기고, 모델이 `textbox "이메일"` 같은 **ref**를 지목하면 액션 계층이 실행하는 구조입니다.
+
+## 계층 구조: CDP가 놓인 자리
+
+흔한 오해는 "Playwright = CDP 래퍼"입니다. 실제 계층은 이렇습니다.
+
+```text
+LLM (판단)
+ └─ 에이전트 루프 (지각 → 액션 선택 → 검증)   ← 직접 만드는 층
+     └─ Playwright (로케이터·자동 대기·공통 API)
+         └─ 브라우저 원격 프로토콜 (Chromium은 CDP 계열)
+             └─ 브라우저
+```
+
+[CDP(Chrome DevTools Protocol)](https://chromedevtools.github.io/devtools-protocol/)는 "디버그·자동화 대상과 신뢰된 클라이언트를 잇는 JSON 기반 프로토콜"입니다. Page·DOM·Runtime·Network·Target 같은 도메인으로 브라우저 상태 대부분을 읽고 조작할 수 있고, [Input 도메인](https://chromedevtools.github.io/devtools-protocol/tot/Input)의 `Input.dispatchMouseEvent`·`Input.dispatchKeyEvent`는 `isTrusted: true`인 입력 이벤트를 만듭니다. `page.evaluate`의 synthetic 이벤트(`isTrusted: false`)와는 다른, 브라우저가 '진짜 입력'으로 취급하는 경로입니다.
+
+Playwright는 브라우저별 저수준 프로토콜 위에 Chromium·Firefox·WebKit 공통 API와 [자동 대기](https://playwright.dev/docs/actionability)를 얹은 계층입니다. 설계 원칙은 "CDP를 직접 만지는 코드를 최소화하고 Playwright 수준에서 격리"하는 것입니다.
+
+## 액션 공간 설계: 최소 집합
+
+액션을 늘리면 프롬프트는 복잡해지고 오선택은 늘어납니다. 제 최소 집합은 이렇습니다.
+
+| 액션 | Playwright API | 전제 조건 |
+| --- | --- | --- |
+| 클릭 | `locator.click()` | 보임·안정화·활성화 자동 확인 |
+| 채우기 | `locator.fill()` | editable 상태 |
+| 키 입력 | `page.keyboard.press()` | 포커스 위치 명시 |
+| 스크롤 | `locator.scrollIntoViewIfNeeded()` | 스크롤 컨테이너 확인 |
+| 호버 | `locator.hover()` | 툴팁·메뉴 전개용 |
+| 이동 | `page.goto()` | URL 상태 단언과 세트 |
+
+좌표 클릭은 캔버스 같은 예외 영역의 예비 수단으로만 둡니다. 액션 래퍼는 한 곳에 모아 로깅을 강제합니다.
+
+```ts
+type AgentAction =
+  | { kind: 'click'; ref: string }
+  | { kind: 'fill'; ref: string; value: string };
+
+async function runAction(page: Page, action: AgentAction) {
+  console.log(`[agent] ${action.kind} ${action.ref}`);
+  if (action.kind === 'click') {
+    await resolve(page, action.ref).click();
+  } else {
+    await resolve(page, action.ref).fill(action.value);
+  }
+  await assertNoFatalDialog(page); // 모든 액션 뒤 공통 검증
+}
+```
+
+`resolve(page, ref)`는 스냅샷의 ref를 `getByRole` 로케이터로 되돌리는 함수입니다. 모델 출력을 좌표가 아니라 ref로 제한하는 것이 액션 공간 설계의 핵심입니다.
+
+## 대기 전략: networkidle을 버려라
+
+Playwright 문서는 `networkidle`을 공식적으로 [DISCOURAGED](https://playwright.dev/docs/api/class-page)로 표기합니다. 분석 스크립트나 롱폴링 하나만 있어도 "네트워크가 조용한 상태"는 오지 않기 때문입니다. 에이전트의 대기는 네트워크가 아니라 **관찰 대상의 상태**에 붙여야 합니다.
+
+```ts
+// 나쁜 예: 네트워크 기반 대기 — 재현 불가능한 플레이크의 원본
+await page.waitForLoadState('networkidle');
+
+// 좋은 예: 요소와 상태 기반 대기
+await expect(page.getByRole('heading', { name: '주문 완료' })).toBeVisible();
+await page.waitForFunction(
+  () => document.querySelector('[data-status]')?.getAttribute('data-status') === 'ready',
+);
+```
+
+섞어 쓰는 순서는 이렇습니다. 액션 직후는 [auto-waiting](https://playwright.dev/docs/actionability)에 맡기고, 화면 근거리는 `toBeVisible`류의 재시도 단언, 앱 내부 상태는 `waitForFunction`으로 관찰합니다. 어느 쪽도 "시간"을 기다리지 않습니다.
+
+## 검증: 스냅샷 diff와 상태 단언
+
+자율 주행에는 매 스텝의 자가 검증이 필수입니다. 저는 두 축을 씁니다.
+
+```ts
+// 1) 구조 검증: 접근성 트리를 템플릿과 비교
+await expect(page).toMatchAriaSnapshot(`
+  - banner:
+    - heading "주문" [level=1]
+  - main:
+    - table "주문 내역"
+    - button "다음 단계"
+`);
+
+// 2) 상태 검증: 도착지 URL
+if (!page.url().includes('/orders/done')) {
+  throw new Error(`예상과 다른 도착지: ${page.url()}`);
+}
+```
+
+구조 단언은 `ariaSnapshot()` 결과를 스텝마다 저장해 이전 상태와 diff를 뜨는 감사 로그로도 씁니다. "왜 여기서 클릭했나"의 재현은 이 로그로 하므로, 실패 디버깅은 사실상 로그 읽기가 됩니다.
+
+## 실패 처리: 리프레시·탭 관리·재시도 예산
+
+원칙은 "같은 액션을 무지성 재시도하지 않는다"입니다. 복구는 단계적 시퀀스로 정의해 둡니다.
+
+1. **요소 재탐색** — 스냅샷을 다시 떠서 ref가 여전히 존재하는지 확인. 대부분의 실패는 지각이 낡은 것입니다.
+2. **새로고침** — `page.reload()` 후 목표 상태 단언부터 재시작.
+3. **탭 재동기** — `context.pages()`로 팝업을 닫고 작업 탭을 다시 특정.
+4. **컨텍스트 재생성** — 모두 실패하면 브라우저 컨텍스트를 새로 만들어 처음부터.
+
+재시도에는 예산을 겁니다. 최대 스텝 수와 "연속 N스텝 진행 없음" 조건을 걸어 두면, 무한 표류 대신 리포트가 남습니다.
+
+## Playwright MCP가 바꾼 것
+
+2026년의 큰 변화는 이 설계가 도구로 굳어졌다는 점입니다. [Playwright MCP](https://github.com/microsoft/playwright-mcp)는 ["vision model이 필요 없다"](https://playwright.dev/mcp/introduction)고 명시하며, 상호작용마다 [ref가 달린 구조화 스냅샷](https://playwright.dev/mcp/snapshots)을 돌려줍니다. 이 글의 원칙(지각=접근성 트리, 액션=ref)이 도구가 된 셈입니다. MCP 개념은 [예전에 정리한 글](/posts/model-context-protocol-guide)을 참고하시면 좋습니다.
+
+직접 루프를 만들지, Playwright MCP 위에 정책만 얹을지의 기준은 커스터마이징 지점입니다. 대기·검증·재시도가 도메인에 강하게 결합되면 직접 만들고, 범용 브라우징이면 MCP가 시작점으로 충분합니다. 브라우저 쪽도 같은 방향으로, [Chrome 148의 DevTools](https://developer.chrome.com/blog/new-in-devtools-148)는 전체 접근성 트리를 기본 뷰로 승격했습니다.
+
+## 체크리스트
+
+- [ ] 지각 계층을 DOM이 아니라 접근성 트리/aria 스냅샷으로 잡았는가
+- [ ] 모델의 액션 출력을 좌표가 아니라 ref로 제한했는가
+- [ ] 액션 집합을 최소(click/fill/press/scroll/hover)로 유지했는가
+- [ ] networkidle 대신 요소·상태 기반 대기를 쓰는가
+- [ ] 매 스텝 스냅샷 diff와 상태 단언으로 자가 검증하는가
+- [ ] 실패 시 재시도가 아니라 단계적 복구 시퀀스를 타는가
+- [ ] 최대 스텝·무진행 감지 같은 예산이 걸려 있는가
+
+## 마치기
+
+브라우저 에이전트 설계의 뼈대는 의외로 보수적입니다. 접근성 트리라는 오래된 표준 인터페이스 위에, Playwright가 검증해 온 대기와 로케이터 관행을 얹고, 실패를 단계적으로 복구하는 것. 모델이 바뀔 때마다 교체되는 것은 판단 계층뿐이고, 이 하부 설계는 그대로 재사용됩니다.
+
+## 레퍼런스
+
+- [What is the accessibility tree?](https://developer.chrome.com/blog/full-accessibility-tree) — Chromium 접근성 트리의 정의
+- [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/) — CDP 공식 뷰어와 도메인 목록
+- [CDP Input 도메인](https://chromedevtools.github.io/devtools-protocol/tot/Input) — 신뢰된 입력 이벤트 디스패치
+- [Playwright Aria Snapshots](https://playwright.dev/docs/aria-snapshots) — 접근성 트리 YAML 스냅샷과 단언
+- [Playwright Page API](https://playwright.dev/docs/api/class-page) — networkidle DISCOURAGED 표기
+- [Playwright MCP](https://github.com/microsoft/playwright-mcp) — 접근성 스냅샷 기반 공식 MCP 서버
+- [Chrome DevTools 148](https://developer.chrome.com/blog/new-in-devtools-148) — 전체 접근성 트리 기본화, DevTools for agents
+- [Introducing computer use (Anthropic)](https://www.anthropic.com/news/3-5-models-and-computer-use) — 2024-10 컴퓨터 사용 베타 발표

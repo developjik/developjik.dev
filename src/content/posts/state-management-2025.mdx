@@ -1,0 +1,118 @@
+---
+title: '2025년 상태관리 완전 정리: 어떤 상태를 어디에 둘 것인가'
+date: '2025-07-18'
+description: '2025년의 프론트엔드 상태관리는 전역 스토어 하나로 모두를 담는 방식에서 상태 종류별로 책임을 나누는 방식으로 이동했습니다. UI·서버·URL·폼 상태 4분류를 기준으로 Redux 시대의 가정이 흔들린 원인과 Zustand/Jotai로의 수렴, signal의 부상을 분석합니다. 서버 상태는 TanStack Query/SWR에 위임하고 전역 클라이언트 스토어는 최소화하는 실전 결론을 담은 정리입니다.'
+tags: ['상태관리', 'Zustand', 'TanStack Query', 'Signals', 'React']
+---
+
+# 2025년 상태관리 완전 정리: 어떤 상태를 어디에 둘 것인가
+
+## 문제 정의: 전역 스토어는 왜 비대해지는가
+
+작년에 이어 올해 사이드 프로젝트를 시작하며 든 생각은 "이제 상태관리 라이브러리를 고르는 일"이 아니라 "상태를 종류별로 나눠 어디에 둘지 정하는 일"이라는 점이었습니다. 과거의 표준 조합이었던 Redux 중심 아키텍처에서는 서버에서 온 데이터, UI의 열림/닫힘, 폼 입력값, 라우팅 파라미터까지 전부 하나의 스토어에 넣었습니다. 그 결과 스토어는 애플리케이션의 축소판이 됐고, 모든 변경이 액션·리듀서·셀렉터를 타면서 유지보수 비용이 몇 곱절로 불어났습니다.
+
+2025년에 이 질문에 답하려면 라이브러리 비교표가 아니라 "상태의 분류"에서 출발해야 합니다. 분석해 보면 상태관리 논쟁의 대부분은 서로 다른 종류의 상태를 하나의 도구로 처리하려 할 때 발생하기 때문입니다.
+
+## 프레임: 상태를 4종류로 나눠 보기
+
+경험적으로 프론트엔드의 상태는 네 종류로 충분히 분류됩니다.
+
+1. **UI 상태**: 모달 열림 여부, 사이드바 접힘, 테마. 휘발성이고 서버와 무관하며 범위가 좁습니다.
+2. **서버 상태**: API가 돌려주는 데이터. 클라이언트에는 "캐시"로 존재하며 원본은 서버에 있습니다. 신선도(staleness), 재검증(revalidation), 낙관적 업데이트가 본질적인 문제입니다.
+3. **URL 상태**: 검색어, 페이지, 필터, 정렬. 공유·새로고침·뒤로 가기에서 살아남아야 하는 상태입니다.
+4. **폼 상태**: 입력값, 검증 에러, 제출 진행 상황. 생명주기가 명확하고(마운트~제출) 검증 로직이 중심입니다.
+
+이 분류의 실용성은 "각 항목마다 최적의 담당자가 다르다"는 데 있습니다. 하나의 전역 스토어가 4종을 모두 떠안는 순간, 캐시 무효화 로직과 UI 토글 로직이 같은 파일에서 뒤엉키기 시작합니다.
+
+## 원인 분석: Redux 시대의 가정이 흔들린 이유
+
+Redux가 지배적이던 시기의 가정은 두 가지였습니다. "서버 데이터도 결국 클라이언트 상태의 하나"이고, "상태 변경은 반드시 추적 가능해야 한다"는 것입니다. 첫째 가정은 [TanStack Query v5 발표(2023년 10월)](https://tanstack.com/blog/announcing-tanstack-query-v5)와 [SWR 2.0](https://swr.vercel.app/blog/swr-v2)이 등장한 뒤 더 이상 성립하지 않습니다. 서버 상태는 캐시 문제이지 앱 상태 문제가 아니며, 캐시 신선도·재시도·중복 요청 제거는 전용 라이브러리가 훨씬 잘 푸는 영역임이 입증됐습니다.
+
+둘째 가정도 현실과 어긋났습니다. [React 19(2024년 12월)](https://react.dev/blog/2024/12/05/react-19)는 폼 제출·낙관적 갱신을 위한 Actions와 `useOptimistic`을 프레임워크 차원에 추가했고, [React의 Context 문서](https://react.dev/learn/passing-data-deeply-with-context)는 Context를 "prop drilling의 대안, 즉 값의 주입 수단"으로 설명할 뿐 상태관리 도구로 내세우지 않습니다. Context 값이 바뀌면 해당 값을 구독하는 컴포넌트 전체가 다시 렌더링되므로, 빈번히 바뀌는 상태를 Context에 두는 설계는 공식 문서에서도 권장되지 않는 방향입니다. Context는 의존성 주입이지 상태관리가 아닙니다.
+
+## 해법: 상태 종류별 담당자 정하기
+
+### 서버 상태 → TanStack Query / SWR
+
+서버 상태는 전용 캐시 레이어에 위임합니다. 컴포넌트는 데이터를 "소유"하지 않고 선언적으로 구독합니다.
+
+```ts
+import { useQuery } from "@tanstack/react-query";
+
+function ProductList() {
+  const { data, isPending, error } = useQuery({
+    queryKey: ["products"],
+    queryFn: () => fetch("/api/products").then((res) => res.json()),
+  });
+
+  if (isPending) return <p>불러오는 중…</p>;
+  if (error) return <p>데이터를 가져오지 못했습니다.</p>;
+  return (
+    <ul>
+      {data.map((p: { id: string; name: string }) => (
+        <li key={p.id}>{p.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+로딩·에러·재검증이 사용 Hook 안으로 들어오면서, 전역 스토어에 쌓이던 `isLoading`, `lastFetchedAt` 같은 부수 상태가 사라집니다.
+
+### 클라이언트 상태 → Zustand / Jotai
+
+남은 진짜 클라이언트 상태는 의외로 작습니다. 이 잔여분을 담는 도구로 생태계는 [Zustand v5(2024년 10월)](https://pmnd.rs/blog/announcing-zustand-v5)와 [Jotai](https://jotai.org/docs/core/atom)로 수렴하는 양상입니다. 공통점은 셀렉터 단위 구독으로 "쓰는 컴포넌트만" 재렌더링된다는 점, Provider 래퍼가 필요 없다는 점, 학습 비용이 거의 없다는 점입니다. Zustand v5는 새 기능 추가 없이 레거시 제거에 집중한 릴리스로, API가 이미 안정 영역에 도달했음을 보여줍니다.
+
+```ts
+import { create } from "zustand";
+
+type CartStore = {
+  itemIds: string[];
+  addItem: (id: string) => void;
+};
+
+export const useCartStore = create<CartStore>((set) => ({
+  itemIds: [],
+  addItem: (id) =>
+    set((state) => ({ itemIds: [...state.itemIds, id] })),
+}));
+```
+
+앰비언트 스토어 하나가 아니라 도메인별 작은 스토어 여러 개로 나누는 것이 요즘 권장 흐름입니다.
+
+### signal의 부상
+
+상태 원시(primitive) 개념을 프레임워크에 직접 넣는 signal 모델도 주목할 만합니다. [Preact의 Signals 소개(2022년)](https://preactjs.com/blog/introducing-signals/)는 값 자체가 자신의 의존성을 추적해 컴포넌트 전체가 아니라 정확히 그 값이 쓰인 곳만 갱신한다는 점을 내세웠고, 현재 [가이드 문서](https://preactjs.com/guide/v11/signals/)와 `@preact/signals-react` 패키지로 React 프로젝트에서도 쓸 수 있습니다. [Angular는 v16(2023년 5월)](https://blog.angular.dev/angular-v16-is-here-4d7a28ec680d)부터 [signal을 도입](https://angular.dev/guide/signals)해 반응형 상태와 계산값(computed)을 프레임워크 기본 요소로 밀고 있고, Solid는 처음부터 signal을 중심에 둔 프레임워크입니다. "상태가 바뀌면 어디를 다시 그릴지"를 라이브러리가 아니라 언어에 가까운 추상화로 해결하려는 흐름으로 읽힙니다.
+
+### 폼 상태와 URL 상태
+
+폼은 [React Hook Form](https://react-hook-form.com/)처럼 비제어 입력 기반의 전용 라이브러리나 React 19의 Actions 계열 API로, URL 상태는 라우터의 검색 파라미터 API로 담당자를 분리합니다. 이 둘을 전역 스토어에 넣는 것은 상태 복제(스토어와 DOM/URL에 같은 값이 존재)를 만들어 동기화 버그의 원인이 됩니다.
+
+## 체크리스트: 새 프로젝트 상태관리 결정 트리
+
+1. 이 상태의 원본이 서버인가? → TanStack Query/SWR의 캐시로.
+2. 새로고침·공유에서 유지돼야 하는가? → URL(검색 파라미터)로.
+3. 마운트~제출 생명주기를 가지는 입력인가? → 폼 라이브러리로.
+4. 나머지 휘발성 UI 상태인가? → 먼저 컴포넌트 지역 상태(`useState`)로 시작.
+5. 지역 상태로 안 되는 진짜 공유 상태만 Zustand/Jotai 스토어로 승격.
+6. Context는 테마·다국어·주입용 의존성에만 사용.
+
+이 트리를 적용한 결과, 제 프로젝트에서 전역 스토어가 담당한 것은 장바구니 하나였습니다. 나머지는 이미 각자의 담당자가 있었습니다.
+
+## 시사점
+
+2025년의 결론을 한 문장으로 압축하면 "전역 클라이언트 상태 스토어는 최소화하라"입니다. 상태관리의 난이도는 상태 총량이 아니라 '종류가 다른 상태가 한 곳에 섞이는 정도'에서 나옵니다. Redux의 철학이 무너진 것이 아니라, Redux가 짊어지던 역할 대부분이 더 나은 담당자(쿼리 캐시, signal, 폼 라이브러리, 라우터)로 이동한 것입니다. 남은 것은 작아진 만큼 명확해진 선택입니다.
+
+## 레퍼런스
+
+- [Announcing TanStack Query v5 — TanStack Blog](https://tanstack.com/blog/announcing-tanstack-query-v5) — 2023년 10월 v5 발표와 서버 상태 캐싱 철학
+- [Announcing SWR 2.0 — Vercel](https://swr.vercel.app/blog/swr-v2) — useSWRMutation과 낙관적 UI를 포함한 SWR 2.0 소개
+- [Announcing Zustand v5 — Poimandres](https://pmnd.rs/blog/announcing-zustand-v5) — 2024년 10월 Zustand v5 변경점(레거시 정리 중심)
+- [atom — Jotai Docs](https://jotai.org/docs/core/atom) — atom 단위 원자적 상태 모델 문서
+- [React 19 — react.dev](https://react.dev/blog/2024/12/05/react-19) — Actions, useOptimistic 등 폼·비동기 UI의 프레임워크 내장화
+- [Passing Data Deeply with Context — react.dev](https://react.dev/learn/passing-data-deeply-with-context) — Context의 공식 위치(값 주입)와 재렌더 주의점
+- [Introducing Signals — Preact](https://preactjs.com/blog/introducing-signals/) — signal 모델의 목표와 성능 특성 소개
+- [Signals — Preact Guide](https://preactjs.com/guide/v11/signals/) — signal/computed/effect 사용법
+- [Angular v16 is here! — Angular Blog](https://blog.angular.dev/angular-v16-is-here-4d7a28ec680d) — 2023년 5월 Angular signals 도입 발표
+- [Angular Signals — angular.dev](https://angular.dev/guide/signals) — Angular signal API 공식 가이드
+- [React Hook Form](https://react-hook-form.com/) — 비제어 입력 기반 폼 상태관리 라이브러리 공식 문서

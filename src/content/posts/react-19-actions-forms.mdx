@@ -1,0 +1,356 @@
+---
+title: 'React 19의 Actions와 폼 — useActionState·useOptimistic 실전 가이드'
+date: '2025-04-04'
+description: '2024년 12월 5일 정식 출시된 React 19에서 폼 처리의 새 표준이 된 Actions을 정리했습니다. form action 속성부터 useActionState, useFormStatus, useOptimistic 낙관적 업데이트 패턴, ref prop과 Document Metadata까지 폼과 액션 중심의 실전 가이드.'
+tags: ['React', 'React 19', '폼', '프론트엔드', '낙관적 업데이트']
+---
+
+# React 19의 Actions와 폼 — useActionState·useOptimistic 실전 가이드
+
+## 개요
+
+[React 19가 2024년 12월 5일 정식 출시](https://react.dev/blog/2024/12/05/react-19)되었습니다. Server Components의 안정화, `ref` prop, `use` API 등 변경이 많지만, 일반 앱 개발자의 코드를 가장 많이 바꿀 영역은 단연 폼(Form)입니다. 데이터 변경(pending 상태, 에러 처리, 낙관적 업데이트, 폼 리셋)을 프레임워크가 대신 관리해주는 Actions가 새로운 표준이 되었기 때문입니다.
+
+React 18의 동시성 렌더링은 [앞선 글](/posts/react-concurrent-rendering)에서 다뤘으니, 이 글은 완전히 폼과 액션에만 집중합니다. Before/After 코드로 문제를 보여주고, 새 훅들을 하나씩 익힌 뒤, 마지막에 낙관적 업데이트가 적용된 댓글 폼을 완성해봅니다.
+
+## 배경: 폼 제출의 보일러플레이트
+
+지금까지 React로 폼을 처리하려면 상태 세 개부터 시작했습니다. 값을 담을 state, 제출 중인지 나타낼 state, 에러를 담을 state입니다.
+
+```tsx
+// Before: React 18 방식
+function CommentForm() {
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsPending(true);
+    const { error } = await saveComment(text);
+    setIsPending(false);
+    if (error) {
+      setError(error);
+      return;
+    }
+    setText('');
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} />
+      <button type="submit" disabled={isPending}>
+        {isPending ? '저장 중…' : '댓글 달기'}
+      </button>
+      {error && <p role="alert">{error}</p>}
+    </form>
+  );
+}
+```
+
+동작은 하지만 관심사가 섞여 있습니다. 폼 입력 검증은 컴파운드 컴포넌트로 빼기 어렵고, pending 상태는 매번 손으로 관리해야 하고, 성공 후 입력값 초기화도 잊기 쉽습니다. React 팀은 이 패턴이 "데이터 변경 후 상태 반영"이라는 하나의 작업이라는 점에 주목했습니다.
+
+## Actions: 데이터 변경을 하나의 개념으로
+
+React 19에서 **async 함수를 트랜지션에서 실행하면 그 함수를 "Action"이라고 부릅니다**(관례상의 이름입니다). 트랜지션에서 async 함수를 쓸 수 있게 되면서 아래 네 가지가 자동으로 처리됩니다([React 19 발표문](https://react.dev/blog/2024/12/05/react-19)).
+
+- **pending 상태**: 요청 시작과 함께 pending이 true가 되고, 최종 상태 커밋과 함께 자동으로 false로
+- **낙관적 업데이트**: `useOptimistic`과 조합해 즉시 UI 반영
+- **에러 처리**: 실패 시 에러 바운더리로 전파, 낙관적 값은 자동 롤백
+- **폼**: 함수형 `action` prop이 폼을 자동으로 리셋
+
+가장 단순한 형태는 `useTransition`에 async 작업을 넣는 것입니다.
+
+```tsx
+function UpvoteButton({ onUpvote }: { onUpvote: () => Promise<void> }) {
+  const [isPending, startTransition] = useTransition();
+
+  return (
+    <button
+      disabled={isPending}
+      onClick={() => startTransition(() => onUpvote())}
+    >
+      {isPending ? '반영 중…' : '추천'}
+    </button>
+  );
+}
+```
+
+`isPending`을 손으로 set한 적이 없는데 요청 생명주기와 정확히 맞물려 돌아갑니다.
+
+## form의 action prop: 함수를 넘기는 폼
+
+React 19의 `<form>`은 `action`에 함수를 받습니다. 폼이 제출되면 React가 FormData를 담아 이 함수를 호출합니다.
+
+```tsx
+async function createComment(formData: FormData): Promise<void> {
+  'use server'; // Next.js 등 서버 환경에서 실행 (클라이언트 폼에서 호출)
+  await db.comments.add(String(formData.get('text')));
+}
+
+function CommentForm() {
+  return (
+    <form action={createComment}>
+      <textarea name="text" required />
+      <button type="submit">댓글 달기</button>
+    </form>
+  );
+}
+```
+
+눈여겨볼 점이 세 가지입니다. 첫째, 입력값이 자동으로 FormData에 담기므로 controlled component로 만들지 않아도 됩니다. 둘째, Action이 성공하면 **폼이 자동으로 리셋**됩니다(비제어 컴포넌트 기준). 셋째, 버튼에 `formAction` 속성을 지정하면 버튼 단위로 다른 액션을 걸 수도 있습니다. 수동 리셋이 필요하면 `requestFormReset` API를 씁니다.
+
+## useActionState: 결과 상태까지 한 번에
+
+폼 제출의 결과(에러 메시지, 반환값)까지 필요하면 `useActionState`를 씁니다. 시그니처는 `const [state, formAction, isPending] = useActionState(action, initialState)`입니다.
+
+```tsx
+import { useActionState } from 'react';
+
+async function updateNickname(
+  _prevState: string | null,
+  formData: FormData,
+): Promise<string | null> {
+  const nickname = String(formData.get('nickname') ?? '').trim();
+  if (nickname.length < 2) {
+    return '닉네임은 두 글자 이상이어야 해요.';
+  }
+  const { error } = await api.updateNickname(nickname);
+  return error ?? null;
+}
+
+function NicknameForm() {
+  const [error, submitAction, isPending] = useActionState(updateNickname, null);
+
+  return (
+    <form action={submitAction}>
+      <input name="nickname" defaultValue="developjik" />
+      <button type="submit" disabled={isPending}>
+        {isPending ? '변경 중…' : '닉네임 변경'}
+      </button>
+      {error && <p role="alert">{error}</p>}
+    </form>
+  );
+}
+```
+
+액션이 `(이전 상태, formData) => 새 상태` 형태로 바뀌는 것만 빼면 어렵지 않습니다. `isPending`도 함께 돌려받으니 상태 세 개가 훅 하나로 합쳐졌습니다. 참고로 이 훅은 RC 시절 `useFormState`라는 이름이었는데 정식 출시 전에 `useActionState`로 개명되었습니다.
+
+## useFormStatus: 부모 폼의 상태를 조용히 읽기
+
+설계 시스템을 만들 때 문제가 하나 있습니다. Submit 버튼 컴포넌트 입장에서는 자신이 속한 폼이 제출 중인지 알 수 없으니, pending을 위해 prop을 계속 내려주는 drilled 구멍이 생깁니다. `useFormStatus`는 컨텍스트 없이 부모 `<form>`의 상태를 읽게 해줍니다.
+
+```tsx
+import { useFormStatus } from 'react-dom';
+
+function SubmitButton({ children }: { children: React.ReactNode }) {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" disabled={pending}>
+      {pending ? '처리 중…' : children}
+    </button>
+  );
+}
+
+function SettingsForm({ action }: { action: (formData: FormData) => void }) {
+  return (
+    <form action={action}>
+      {/* ...입력 필드들... */}
+      <SubmitButton>저장</SubmitButton>
+    </form>
+  );
+}
+```
+
+`pending` 외에도 `data`, `method`, `action`을 돌려줍니다. 폼을 감싼 쪽이 pending 상태를 소유하고, 소비하는 쪽은 필요한 것만 조용히 읽는 구조라 디자인 시스템 컴포넌트에 특히 어울립니다.
+
+## useOptimistic: 기다림 없는 UI
+
+낙관적 업데이트는 "서버가 성공할 것이라 낙관적으로 가정하고 UI를 먼저 바꾸는" 패턴입니다. React 19의 `useOptimistic`은 이 패턴의 어려운 부분(실패 시 롤백)을 대신 처리합니다.
+
+```tsx
+import { useOptimistic } from 'react';
+
+type Comment = { id: number; text: string };
+
+function LikeButton({ liked, onToggle }: { liked: boolean; onToggle: () => Promise<void> }) {
+  const [optimisticLiked, toggleOptimistic] = useOptimistic(liked);
+
+  async function action() {
+    toggleOptimistic(!liked); // 즉시 반영
+    await onToggle();         // 실제 요청
+  }
+
+  return (
+    <form action={action}>
+      <button aria-pressed={optimisticLiked}>
+        {optimisticLiked ? '좋아요 취소' : '좋아요'}
+      </button>
+    </form>
+  );
+}
+```
+
+`toggleOptimistic`을 부르는 순간 `optimisticLiked`가 바뀌어 즉시 렌더링되고, 폼 액션이 끝나면(성공이든 실패든) 실제 prop 값으로 자동 복귀합니다. 실패 시 되돌리는 코드를 우리가 쓰지 않아도 됩니다.
+
+## 실전: 낙관적 업데이트가 있는 댓글 폼
+
+지금까지의 조각을 합쳐 봅시다. 요구사항은 이렇습니다. 댓글을 제출하면 서버 응답 전에 목록에 바로 나타나고, 실패하면 흔적 없이 사라지며, 제출 중에는 버튼이 비활성화됩니다.
+
+```tsx
+'use client';
+
+import { useActionState, useOptimistic, useState } from 'react';
+import { useFormStatus } from 'react-dom';
+
+type Comment = { id: number; text: string; pending?: boolean };
+
+// 서버 호출: 실패 시 예외를 던지면 낙관적 항목은 자동으로 롤백됩니다
+async function saveComment(text: string): Promise<Comment> {
+  const { comment, error } = await api.createComment(text);
+  if (error) throw new Error(error);
+  return comment;
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" disabled={pending}>
+      {pending ? '저장 중…' : '댓글 달기'}
+    </button>
+  );
+}
+
+export function Comments({ initialComments }: { initialComments: Comment[] }) {
+  const [comments, setComments] = useState<Comment[]>(initialComments);
+
+  // 1) useActionState: 에러 메시지 관리와 폼 리셋을 맡김
+  const [error, formAction] = useActionState<string | null, FormData>(
+    async (_prev, formData) => {
+      const text = String(formData.get('text') ?? '').trim();
+      if (!text) return '댓글을 입력해주세요.';
+      try {
+        const saved = await saveComment(text);
+        setComments((list) => [...list, saved]); // 실제 상태 커밋
+        return null;
+      } catch (e) {
+        return e instanceof Error ? e.message : '저장에 실패했습니다.';
+      }
+    },
+    null,
+  );
+
+  // 2) useOptimistic: 목록의 낙관적 복사본에 pending 항목을 임시 추가
+  const [optimisticComments, addOptimistic] = useOptimistic(
+    comments,
+    (list: Comment[], text: string) => [
+      ...list,
+      { id: -Date.now(), text, pending: true },
+    ],
+  );
+
+  // 3) 폼 액션: 낙관적 반영 후 실제 액션 수행
+  function action(formData: FormData) {
+    addOptimistic(String(formData.get('text') ?? ''));
+    formAction(formData);
+  }
+
+
+  return (
+    <section>
+      <ul>
+        {optimisticComments.map((comment) => (
+          <li key={comment.id} style={{ opacity: comment.pending ? 0.6 : 1 }}>
+            {comment.text}
+          </li>
+        ))}
+      </ul>
+      <form action={action}>
+        <input name="text" placeholder="댓글을 입력하세요" required />
+        <SubmitButton />
+        {error && <p role="alert">{error}</p>}
+      </form>
+    </section>
+  );
+}
+```
+
+동작을 정리하면 이렇습니다. 제출 → `addOptimistic`이 반투명 항목을 즉시 목록에 추가 → 서버 저장 → 성공 시 `setComments`로 실제 목록이 커밋되며 낙관적 복사본이 실제 목록으로 대체, 실패 시 낙관적 항목이 자동으로 사라지고 에러 메시지만 남음. 사용자는 첫 페인트를 기다리지 않고, 개발자는 롤백 코드를 쓰지 않습니다. 폼 자동 리셋까지 끝나니 After 코드에서 손으로 관리하던 상태는 실제 목록 하나뿐입니다.
+
+## 곁가지 API: use(), ref prop, Document Metadata
+
+폼 이야기와 자주 만나는 나머지 기능도 짚어둡니다.
+
+**`use`**. 렌더링 중에 Promise나 Context를 읽습니다. 훅과 달리 조건부 호출이 가능해서, prop으로 받은 Promise를 조건 분기 뒤에 읽을 수 있습니다.
+
+```tsx
+import { use, Suspense } from 'react';
+
+function CommentList({ commentsPromise }: { commentsPromise: Promise<Comment[]> }) {
+  const comments = use(commentsPromise);
+  return (
+    <ul>
+      {comments.map((c) => <li key={c.id}>{c.text}</li>)}
+    </ul>
+  );
+}
+
+export function Page({ commentsPromise }: { commentsPromise: Promise<Comment[]> }) {
+  return (
+    <Suspense fallback={<p>불러오는 중…</p>}>
+      <CommentList commentsPromise={commentsPromise} />
+    </Suspense>
+  );
+}
+```
+
+**ref prop**. 함수 컴포넌트에서 `ref`를 일반 prop처럼 받습니다. `forwardRef`는 이제 새 코드에 필요 없고, ref 콜백이 정리 함수를 반환할 수 있게 되어 마운트 해제 시 처리가 깔끔해졌습니다.
+
+```tsx
+function SearchInput({
+  ref,
+  ...props
+}: React.ComponentProps<'input'> & { ref?: React.Ref<HTMLInputElement> }) {
+  return (
+    <input
+      ref={(node) => {
+        node?.focus();
+        return () => console.log('SearchInput 정리');
+      }}
+      {...props}
+    />
+  );
+}
+```
+
+**Document Metadata**. `<title>`, `<meta>`, `<link>`를 컴포넌트 안에서 렌더링하면 React가 `<head>`로 자동으로 옮겨줍니다. 간단한 페이지는 react-helmet 없이 해결됩니다.
+
+```tsx
+function PostPage({ post }: { post: { title: string; tags: string[] } }) {
+  return (
+    <article>
+      <title>{post.title} — developjik.dev</title>
+      <meta name="keywords" content={post.tags.join(', ')} />
+      <h1>{post.title}</h1>
+    </article>
+  );
+}
+```
+
+## 업그레이드 한 줄 정리
+
+React 19로 올리면서 만나는 대부분의 타입 에러는 `@types/react` 정리에서 옵니다. 공식 [업그레이드 가이드](https://react.dev/blog/2024/04/25/react-19-upgrade-guide)와 [types-react-codemod](https://github.com/eps1lon/types-react-codemod)가 변경 대부분을 자동화해주니, 폼 관련 신기능은 마이그레이션과 별개로 필요한 곳부터 조금씩 도입하면 됩니다.
+
+## 마치기
+
+React 19의 폼 스토리는 "새 훅이 늘었다"가 아니라 **데이터 변경의 생명주기가 프레임워크의 관심사가 되었다**는 변화입니다. pending, 에러, 리셋, 낙관적 업데이트로 흩어져 있던 코드가 `action` + `useActionState` + `useOptimistic` + `useFormStatus`의 조합으로 자리를 잡았습니다. 당장 서버 액션이 없는 프로젝트라도 폼 리셋과 pending 처리만으로도 도입할 이유가 충분합니다. 다음 폼을 만들 때 Before 코드를 먼저 써보고 리팩터링해보면, 어디가 줄어드는지 몸으로 느끼실 수 있을 겁니다.
+
+## 레퍼런스
+
+- [React v19 공식 발표](https://react.dev/blog/2024/12/05/react-19) — 2024-12-05 출시 안내와 신기능 전체 요약
+- [useActionState 문서](https://react.dev/reference/react/useActionState) — 시그니처와 폼 액션 조합
+- [useOptimistic 문서](https://react.dev/reference/react/useOptimistic) — 낙관적 업데이트와 자동 롤백
+- [useFormStatus 문서](https://react.dev/reference/react-dom/hooks/useFormStatus) — 부모 폼 상태 읽기
+- [use 문서](https://react.dev/reference/react/use) — 렌더링 중 Promise/Context 읽기
+- [React 19 업그레이드 가이드](https://react.dev/blog/2024/04/25/react-19-upgrade-guide) — 호환성 변경과 마이그레이션 단계
+- [types-react-codemod](https://github.com/eps1lon/types-react-codemod) — React 19 타입 변경 자동화 도구
