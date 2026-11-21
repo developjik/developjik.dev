@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "astro",
+  "buildCommand": "pnpm build",
+  "outputDirectory": "dist",
+  "installCommand": "pnpm install",
+  "trailingSlash": false,
+  "cleanUrls": true,
   "redirects": [
     { "source": "/posts/frontend-ai-code-review-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
     { "source": "/posts/frontend-ai-e2e-evals-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
