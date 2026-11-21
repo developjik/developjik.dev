@@ -6,7 +6,7 @@ GitHub 프로필과 통일된 브랜드(#0e1116 / #4d8dff), Pretendard + Space G
 ## 스택
 
 - **Astro 5** — 콘텐츠 컬렉션(glob loader) + 정적 생성
-- **MDX** — 포스트 74편 (frontmatter: title / date / description / tags)
+- **MDX** — 포스트 75편 (frontmatter: title / date / description / tags)
 - **Tailwind CSS 4** — CSS-first 토큰 디자인 시스템 (src/styles/global.css)
 - **Pagefind** — 전문 검색 + ⌘K 커맨드 팔레트
 - **Shiki** — 코드 하이라이팅 (github-light / github-dark-dimmed 듀얼 테마)
@@ -69,7 +69,7 @@ PUBLIC_GISCUS_CATEGORY_ID=DIC_kwDO...
 ```
 src/
 ├── content.config.ts      # zod 스키마 (posts 컬렉션)
-├── content/posts/         # MDX 포스트 74편
+├── content/posts/         # MDX 포스트 75편
 ├── consts.ts              # 사이트 설정, 대표 글
 ├── lib/posts.ts           # 쿼리·시리즈·태그·읽기시간 유틸
 ├── styles/global.css      # 디자인 토큰 + 컴포넌트 CSS

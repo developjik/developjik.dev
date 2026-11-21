@@ -1,0 +1,446 @@
+---
+title: 'spec-studio 구축기 — 화면설계서의 번호를 객체로 옮기고, SQLite 한 파일을 정본으로 두기'
+date: '2026-11-21'
+description: '기획 올인원 툴을 버리고 그린필드로 다시 세운 spec-studio. 화면 위 번호 핀을 불변 객체로 만들고, 로컬 SQLite 한 파일을 정본으로 두고, Confluence에는 단방향 사본만 보냅니다. 6타입·7링크 추적 그래프, L0→L1→L2, 제안→결정→되돌리기, LLM 제안과 한국어 골든셋 30건 eval까지 — 커밋 16개, 테스트 157개, mock 기준 스키마 100%·타입 93%·링크 92%의 기록입니다.'
+tags: ['프론트엔드', 'AI', '에이전트', 'TypeScript', 'SQLite', '아키텍처', '회고']
+---
+
+# spec-studio 구축기 — 화면설계서의 번호를 객체로 옮기고, SQLite 한 파일을 정본으로 두기
+
+한국어 화면설계서에는 이미 정확한 문법이 있습니다. 화면의 모든 요소에 번호를 붙이고, 비고가 그 번호를 인용하고, 상태·권한·예외가 그 번호에 매달립니다. 문제는 그 번호가 문서에만 산다는 점입니다. 파워포인트에서 3번을 지우면 4번이 3번이 되고, 지난주에 보낸 문서의 `SCR-110-3`은 이제 다른 것을 가리킵니다. 표를 만들려고 손으로 다시 옮기는 동안 원본과 사본은 서로 다른 말을 하기 시작합니다.
+
+그래서 만든 것이 **spec-studio**입니다. 화면 위에 찍은 번호 핀을 객체로 만들고, 그 객체들을 로컬 SQLite 한 파일에 정본으로 두고, 바깥 도구에는 사본만 내보내는 기획 올인원 툴입니다.
+
+- 코드: [github.com/developjik/spec-studio](https://github.com/developjik/spec-studio)
+- 라이브 데모: [developjik.github.io/spec-studio](https://developjik.github.io/spec-studio/) — 설치도, 데몬도, 계정도 없이 브라우저에서 바로
+- 스택: TypeScript(strict) · React 19 · Node 22(`node:sqlite`) · pnpm 9.15.4 모노레포
+- 규모: 커밋 16개, 2026-11-19 15:33 → 20:34 KST 하루
+
+| 항목 | 값 |
+| --- | --- |
+| 저장소 | `developjik/spec-studio` — 2026-11-19 공개, main 직행(PR 없이 CI 초록불 확인) |
+| 코드 | `src` **17,396줄** (앱 8,317 · 코어 2,826 · 스토어 1,935 · 발행 1,267 · 프로토콜 1,208 · 데몬 855 · AI 523 · eval 465) |
+| 테스트 | **157개 / 15파일**(vitest) + 골든셋 30건(별도 게이트) |
+| 번들 | web JS **467.12 kB** (gzip 140.90) · CSS 41.91 kB (gzip 8.22) · daemon 944.5 kB |
+| 스키마 | `user_version` 14, SQLite 객체 66개, 마이그레이션 11→12→13→14 |
+
+이 글은 그 하루에서 다시 봐도 값이 있는 지점을 남깁니다. ① 무엇을 버렸나 ② 6패키지 경계 ③ 번호 불변 규칙 ④ 명령 하나로 모은 변경 경로 ⑤ 문서와 핀의 인용 지문 ⑥ 제안·결정·되돌리기 ⑦ 6타입·7링크 그래프 ⑧ 정본과 사본, 발행 멱등 ⑨ LLM 제안과 키의 수명 ⑩ 골든셋 eval입니다.
+
+## 1. 세 가지 약속
+
+첫 화면에서부터 세 가지를 정하고 시작했습니다.
+
+1. **번호는 불변이다.** 3번을 지우면 결번으로 남는다. 다음 핀은 4번이고, 3번은 다시 쓰지 않는다.
+2. **정본은 로컬 하나다.** 모든 상태는 `graph.db`에 있고, 외부 도구는 사본을 받는 쪽이다.
+3. **3분 안에 시작한다.** 저장소도, 개발 서버도, 시드 데이터도 없이 스크린샷을 붙여넣고 클릭하면 첫 핀이 생긴다.
+
+세 번째 약속이 첫 번째와 충돌하는 순간이 있습니다. "불변"을 지키려면 번호의 최고 기록을 어딘가에 남겨야 하고, 그 기록을 잃으면 지운 3번이 되살아납니다. 그래서 브라우저 임시 모드(localStorage)와 데몬(SQLite) 양쪽에서 같은 규칙이 성립하도록, 번호 할당을 화면이 아니라 도메인 코어의 순수 함수 하나에 가둬 두었습니다.
+
+## 2. 버린 것부터 — 양방향 동기화와 '올인원'
+
+이 툴은 기존 기획 툴을 고친 것이 아니라 버리고 새로 시작한 결과입니다. 재설계에서 가장 오래 붙잡은 결정은 "무엇을 연동할까"가 아니라 "무엇을 연동하지 않을까"였습니다.
+
+- **양방향 동기화를 버렸습니다.** 로컬 정본과 Confluence를 서로 맞추려면 세 갈래 편집(로컬·원격·지난 발행본)을 병합해야 하고, 그 병합은 실패했을 때 사람이 이해할 수 있는 문장을 남기지 않습니다. 대신 **로컬 정본 + 단방향 사본**으로 갔습니다. 발행은 항상 로컬에서 원격으로만 흐르고, 원격에서 고친 내용은 정본을 바꾸지 않습니다.
+- **외부 도구를 편집기로 쓰지 않습니다.** Confluence는 발행 대상, Figma는 프레임 링크만 저장합니다. Figma API로 프레임을 긁어오는 기능은 넣지 않았습니다. 링크는 참조 데이터이고, 화면 이미지는 사람이 붙여넣습니다.
+- **범용 올인원을 좁혔습니다.** 목표는 "기획 산출물 사슬 하나를 닫는 작업실"입니다 — 문제 → 정책 → 화면 → 계약 → 검증. 그 사슬에 필요 없는 것은 v1에 넣지 않았습니다.
+
+이 경계 덕분에 구현이 단순해진 게 아니라, **실패 모드가 사라졌습니다.** 병합 충돌도, 원격 스키마 드리프트도, 발행 후 로컬이 원격을 되읽는 순환도 없습니다. 남은 실패는 "발행이 안 됐다"와 "발행이 두 번 됐다" 둘뿐이고, 둘 다 기록으로 판정할 수 있습니다(9장).
+
+## 3. 6패키지 경계 — 앱은 데이터베이스를 모른다
+
+모노레포는 앱 2개와 패키지 6개입니다.
+
+```text
+apps/web        React 19 — 화면·문서·그래프. 명령만 보낸다
+apps/daemon     node:http — 127.0.0.1:8787. graph.db의 유일한 작성자
+packages/protocol  zod 스키마·명령·이벤트·ID 규칙 (의존성: zod 하나)
+packages/core      순수 도메인 — 핀·문서·그래프·출력. 시계도 fs도 없다
+packages/store     node:sqlite 스토어, 스키마, 마이그레이션
+packages/publish   Confluence 발행 — 스토어를 import하지 않는다
+packages/ai        프롬프트·HTTP 호출·응답 파싱 — DB도 도메인 명령도 모른다
+eval               골든셋 러너 (CI 게이트)
+```
+
+의존 방향은 `apps → packages` 한 방향이고, 이 규칙은 리뷰가 아니라 lint로 강제합니다. `dependency-cruiser`에 금지 규칙 여섯 개를 두고 CI에서 `pnpm dep:check`로 돌립니다.
+
+| 규칙 | 막는 것 |
+| --- | --- |
+| `renderer-never-touches-store` | `apps/web` → `store·daemon·publish·ai` import |
+| `core-is-pure` | `packages/core` → Node 내장 모듈(fs·http·시계) |
+| `ai-is-a-service-not-a-layer` | `packages/ai` → `store·publish·core` |
+| `publish-knows-no-schema` | `packages/publish` → `store` |
+| `protocol-has-no-deps` | `packages/protocol` → zod 외 모든 것 |
+| `mcp-knows-no-schema` | `packages/mcp` → `store` (v1엔 패키지 없음, 자리만) |
+
+현재 `104개 모듈, 217개 의존`을 위반 0건으로 통과합니다. 이 규칙이 막으려는 것은 두 가지였습니다. 코어가 `Date.now()`를 부르는 것(테스트가 시간에 의존하게 됨), 그리고 발행 패키지가 발행 기록을 SQLite에서 직접 읽는 것(테스트가 DB를 세워야 함)입니다. 둘 대신 인자와 포트를 두었습니다.
+
+```ts
+// packages/core/src/project.ts — 시계와 id도 인자다
+export interface ExecuteContext {
+  at: string;
+  nextId: (kind: IdKind, nodeType?: EditableNodeType) => string;
+}
+```
+
+## 4. 번호는 불변 — `pinSeq`는 개수가 아니라 최고 기록
+
+핀 번호 규칙은 `packages/core/src/pins.ts` 한 파일에 있습니다.
+
+```ts
+export function nextPinNumber(pinSeq: number): number {
+  return Math.max(0, Math.trunc(pinSeq)) + 1;
+}
+
+/**
+ * pinSeq는 개수가 아니라 high-water mark다.
+ * 바깥(import·재로드·DB 읽기)에서 온 상태에서는 기록이 없거나 뒤처질 수 있으므로
+ * 남아 있는 가장 큰 번호까지 올린다 — 절대 내리지 않는다.
+ */
+export function resolvePinSeq(pinSeq: number, pins: readonly Pin[]): number {
+  return Math.max(Math.trunc(pinSeq), pinHighWater(pins));
+}
+```
+
+처음에는 `다음 번호 = 남아 있는 핀 개수 + 1`로 잡았습니다. 그러면 3번을 지웠을 때 다음 핀이 3번이 됩니다. 문서에 이미 `SCR-110-3`이라고 적혀 있다면, 그 문장은 조용히 거짓이 됩니다. 그래서 번호를 세는 대신 **기록**합니다. `pin.create`는 `pinSeq`를 읽어 다음 번호를 발급하고, 그 번호로 `pinSeq`를 올립니다. `pin.delete`는 번호를 건드리지 않습니다.
+
+```ts
+case 'pin.delete': {
+  return {
+    project: { ...project, pins: project.pins.filter((pin) => pin.id !== current.id) },
+    events: [{ type: 'pin.deleted', screenId: screen.id, pinId: current.id, number: current.number }],
+  };
+}
+```
+
+결번 계산도 기록을 씁니다. 마지막 핀을 지우면 비교할 살아 있는 핀이 없어서, 기록이 없으면 결번이 조용히 사라집니다.
+
+```ts
+export function missingPinNumbers(pins: readonly Pin[], upTo?: number): number[] {
+  const present = new Set(pins.map((pin) => pin.number));
+  const top = Math.max(pinHighWater(pins), Math.trunc(upTo ?? 0));
+  const gaps: number[] = [];
+  for (let n = 1; n <= top; n += 1) if (!present.has(n)) gaps.push(n);
+  return gaps;
+}
+```
+
+이 규칙은 핀에서 끝나지 않습니다. QA CSV의 케이스 ID는 행 번호가 아니라 핀 번호에서 나옵니다. 2번을 지워도 3번에서 만든 케이스는 `TC-003` 그대로입니다.
+
+```ts
+/** Derived from the pin number, never from the row index. */
+export function qaCaseId(number: number): string {
+  return `TC-${String(number).padStart(3, '0')}`;
+}
+```
+
+번호를 부여하는 곳은 `execute`의 `pin.create` 한 군데뿐이고, 밖에서 번호를 지정하는 명령은 만들지 않았습니다. 화면이 실수로 번호를 넘길 수 없게 스키마에서 막아두면, 규칙은 UI가 아니라 도메인에 삽니다.
+
+## 5. 명령 24종 — 상태를 바꾸는 유일한 경로
+
+상태 변경은 전부 명령입니다. 렌더러는 명령을 보내고, 스토어나 데몬이 한 트랜잭션 안에서 적용한 뒤 결과 이벤트를 돌려줍니다.
+
+```ts
+export const CommandSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('screen.attach'), screen: ScreenSchema }),
+  z.object({ type: z.literal('pin.create'), screenId: ScreenIdSchema, pinType: TypeSchema,
+             title: z.string().trim().min(1).max(120), body: z.string().max(4000),
+             anchor: AnchorSchema }),
+  z.object({ type: z.literal('pin.update'), screenId: ScreenIdSchema, pinId: PinIdSchema,
+             pinType: PinTypeSchema.optional(), title: z.string().optional(),
+             body: z.string().optional(), anchor: AnchorSchema.optional() }),
+  // …
+]);
+```
+
+v1의 명령은 24종입니다.
+
+| 묶음 | 명령 |
+| --- | --- |
+| 화면·핀 | `screen.attach` · `screen.update` · `pin.create` · `pin.update` · `pin.delete` |
+| 문서 | `doc.block.create` · `update` · `delete` · `move` · `doc.pin.link` · `unlink` · `doc.stale.clear` |
+| 제안 | `proposal.create` · `adopt` · `reject` |
+| 그래프 | `node.create` · `update` · `delete` · `link.create` · `delete` · `ack` · `graph.proposal.create` · `adopt` · `reject` |
+
+`pin.update`의 주석 하나가 이 설계의 성격을 보여줍니다. 드래그로 핀을 옮기는 것도 같은 명령입니다. 좌표만 바뀌고 번호는 바뀌지 않습니다. 재배치를 위해 별도 명령을 만들면 "번호가 바뀌지 않는다"는 보장이 두 경로로 갈라집니다.
+
+적용 결과는 프로젝트와 이벤트 목록입니다. 이벤트는 `pin.updated`, `doc.reverted`, `graph.proposal.adopted`처럼 이름이 붙은 사실이고, 스토어는 이벤트를 `event` 테이블에 전역 `seq`로 쌓습니다. UI가 "무슨 일이 있었는지"를 맞히지 않고 읽을 수 있게 하려는 것입니다.
+
+## 6. 문서와 핀 — 인용의 지문
+
+W4의 주제는 화면 옆의 문서입니다. 문단이 핀을 인용하면(`#1 배송 시작 후 취소 불가`), 핀이 바뀌었을 때 그 문단이 아직 맞는지 알아야 합니다. 비교 대상은 핀의 스펙(type·title·body)이고, 비교는 지문으로 합니다.
+
+```ts
+/** 핀의 스펙(type·title·body)만 지문에 넣는다. anchor는 일부러 뺀다. */
+export function pinFingerprint(pin: Pick<Pin, 'type' | 'title' | 'body'>): string {
+  const canonical = `${pin.type}\u0000${pin.title}\u0000${pin.body}`;
+  let hash = 5381;                       // djb2 — 프로세스가 달라도 같은 값
+  for (let index = 0; index < canonical.length; index += 1) {
+    hash = ((hash << 5) + hash + canonical.charCodeAt(index)) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+export function staleBadges(doc: Doc, pins: readonly Pin[]): BlockStale[] {
+  const byId = new Map(pins.map((pin) => [pin.id, pin] as const));
+  const badges: BlockStale[] = [];
+  for (const block of doc.blocks) {
+    for (const ref of block.pinRefs) {
+      const pin = byId.get(ref.pinId);
+      if (pin === undefined) {
+        badges.push({ blockId: block.id, pinId: ref.pinId, reason: 'pin-missing' });
+        continue;
+      }
+      if (pinFingerprint(pin) !== ref.fingerprint) {
+        badges.push({ blockId: block.id, pinId: ref.pinId, reason: 'pin-changed' });
+      }
+    }
+  }
+  return badges;
+}
+```
+
+좌표(anchor)를 지문에서 뺀 것은 판단입니다. **핀을 화면에서 옮기는 일은 문장을 거짓으로 만들지 않습니다.** 인용은 "이 문단이 3번 핀을 근거로 삼는다"는 뜻이지 "3번이 40% 위치에 있다"는 뜻이 아니기 때문입니다. 이 한 줄을 빼지 않으면, 레이아웃을 정리할 때마다 문서 전체에 확인 배지가 뜹니다.
+
+문단 텍스트에도 규칙이 있습니다. 인용 줄은 사람이 쓰지 않고 시스템이 다시 씁니다. 사람이 쓴 본문 끝에 `[핀] #3 …` 블록을 붙이고, 핀이 바뀌면 그 줄만 새 사실로 재생성합니다. 사람의 문장과 기계의 인용이 섞이지 않으니, "이 문단에서 무엇이 사람의 판단인가"를 나중에도 구분할 수 있습니다.
+
+## 7. 제안 1장, 결정 1번, 되돌리기 1번
+
+문서 편집은 곧바로 적용하지 않습니다. 핀이 바뀐 문단이나(stale) 문서에 없는 핀 요약을 **제안 한 장**으로 만들고, 사람이 결정 카드에서 채택해야 씁니다. 카드에는 요약 한 줄과 문단별 before/after가 나옵니다.
+
+채택은 패치를 쓰는 일과 스냅샷을 남기는 일이 같은 트랜잭션 안에서 일어납니다.
+
+```ts
+/** op_log.before에 들어갈 값: 어떤 문단이 있었고, 무엇을 들고 있었고, 어디에 있었나. */
+export function snapshotForPatches(doc: Doc, patches: readonly ProposalPatch[]): DocSnapshot {
+  const entries: BlockSnapshotEntry[] = patches.map((patch) => {
+    if (patch.before !== null) {
+      return { blockId: patch.blockId, existed: true, type: patch.before.type,
+               text: patch.before.text, pinRefs: patch.before.pinRefs,
+               index: Math.max(0, blockIndex(doc, patch.blockId)) };
+    }
+    const anchor = patch.afterBlockId === null ? -1 : blockIndex(doc, patch.afterBlockId);
+    return { blockId: patch.blockId, existed: false, type: null, text: null,
+             pinRefs: null, index: anchor + 1 };
+  });
+  return { docId: doc.id, rev: doc.rev, entries };
+}
+```
+
+`되돌리기`는 이 스냅샷을 읽어 문단을 원래 자리와 내용으로 돌려놓고, **그 자체를 원장에 한 줄 더 씁니다.** 되돌리기의 되돌리기가 성립하려면 되돌리기도 기록이어야 하기 때문입니다.
+
+```ts
+this.#insertLog({
+  at, kind: 'proposal.revert', target: doc.id,
+  before: currentSnapshot,   // 되돌리기 직전 상태
+  after: snapshot,           // 되돌린 결과
+  payload: { revertedSeq: adopt.seq, proposalId: proposal?.id ?? null },
+});
+```
+
+스냅샷은 패치가 건드린 문단만 담습니다. 되돌리기가 오래된 작업을 되돌릴 때 그 사이에 쓴 다른 문단을 지우면 안 되기 때문입니다. 복원 함수는 영향받은 id 집합 밖의 문단을 그대로 두고, 영향받은 것만 원래 인덱스에 다시 꽂습니다.
+
+그래프 제안도 같은 문법입니다. `graph.proposal.create`가 카드를 만들고, `adopt`가 노드와 링크를 한 번에 만들고, `revert`가 그 노드들과 그 노드에 닿은 링크를 함께 지웁니다. 노드가 사라지면 그 노드를 가리키던 엣지는 남을 수 없기 때문입니다. 이미 있던 객체끼리의 링크는 건드리지 않습니다.
+
+## 8. 그래프 — 6타입, 7링크, 그리고 고아
+
+화면설계서의 추적성은 "이 요구사항이 어느 화면에서 구현되고, 어느 정책이 규율하고, 어느 QA가 검증하는가"입니다. 그 질문에 답하려면 링크에 이름이 있어야 합니다. 타입 없는 엣지는 "관련 있음"만 말하고, 그건 추적 그래프가 존재하는 이유를 지웁니다.
+
+| 노드 | 저장 위치 |
+| --- | --- |
+| 화면(screen) · 핀(pin) | 이미 있던 1급 객체 |
+| 요구사항(req) | `obj` / `specnode` + `requirement` |
+| 정책(policy) | `obj` / `specnode` + `policy` |
+| 계약(contract) | `obj` / `contract` |
+| QA(qa) | `obj` / `verification` |
+
+링크는 7종이고, 각 링크는 양 끝의 노드 타입까지 정합니다. 이 표는 프로토콜과 SQLite 레지스트리(`link_type`)에 같은 내용으로 들어 있고, 스토어의 트리거가 `link_kind_mismatch`로 마지막에 막습니다.
+
+| 링크 | 뜻 | from → to |
+| --- | --- | --- |
+| `implements` | 구현한다 | 화면·핀 → 요구사항 |
+| `governs` | 규율한다 | 정책 → 화면·핀·요구사항 |
+| `handles_edge` | 예외를 처리한다 | 핀·화면·요구사항 → 요구사항·정책 |
+| `verifies` | 검증한다 | QA → 화면·핀·요구사항·정책·계약 |
+| `references` | 참조한다 | 여섯 타입 모두 |
+| `derived_from` | 도출된다 | 요구사항·정책·계약·QA → 요구사항·정책·계약·QA·핀 |
+| `blocks` | 막는다 | 요구사항·정책·계약·QA·핀 |
+
+추적 뷰는 세 가지를 표시합니다.
+
+- **고아 핀**: 어떤 링크도 닿지 않은 핀. 리뷰어가 가장 먼저 찾는 것입니다.
+- **고아 노드**: 종류마다 "있어야 할 링크"가 다릅니다. 요구사항은 `implements`나 `handles_edge`를 받아야 하고, 정책은 무언가를 규율하거나 도출돼야 하고, QA는 무언가를 검증해야 하고, 계약은 어디에도 닿지 않으면 이유가 아직 안 적힌 것입니다.
+- **suspect 링크**: 끝점의 제목·본문이 바뀌면 링크는 사라지지 않고 질문을 얻습니다(`suspectSince`, `suspectWhy`). 사람이 읽고 `확인`하면 풀립니다. 위치만 옮긴 핀은 suspect를 만들지 않습니다 — 6장의 원칙과 같습니다.
+
+성숙도 사다리는 점수가 아니라 체크리스트입니다.
+
+| 레벨 | 조건 |
+| --- | --- |
+| L0 초안 | 화면이 있고, 핀이 1개 이상 |
+| L1 구조화 | 문단이 핀을 인용 · stale 0건 · 요구사항이나 정책이 연결됨 |
+| L2 발행 준비 | QA 케이스가 연결됨 · Figma 프레임이나 실제 발행 기록이 있음 |
+
+`evaluateMaturityLevel`은 순수 함수라서, 헤더 배지는 "지금 어디인지"와 "무엇을 하면 올라가는지"를 같은 값에서 꺼냅니다. 점수 72점 같은 숫자는 다음 행동을 알려주지 않습니다.
+
+## 9. 정본과 사본 — 스키마, 그리고 발행 멱등
+
+`graph.db`의 스키마는 한 파일입니다. `user_version` 14, 마이그레이션 3단(11→12→13→14), `sqlite_master` 객체 66개. WAL, `foreign_keys`, `busy_timeout` 5000ms를 켜고 시작합니다.
+
+스키마에서 데이터보다 규칙을 더 많이 적었습니다. 대표적으로 셋입니다.
+
+```sql
+-- kind는 불변. 바꾸려면 새 객체 + supersedes 링크
+CREATE TRIGGER obj_kind_immutable BEFORE UPDATE OF kind ON obj FOR EACH ROW
+WHEN NEW.kind <> OLD.kind BEGIN SELECT RAISE(ABORT, 'obj.kind_immutable'); END;
+
+-- 핀은 부모 화면 없이 존재하지 않는다
+CHECK (kind <> 'pin' OR parent_id IS NOT NULL)
+
+-- 링크 타입의 양 끝 종류를 트리거로 강제 (JSON 문자열만 두면 의미가 조용히 깨진다)
+CREATE TRIGGER link_kind_guard_ins BEFORE INSERT ON link FOR EACH ROW
+WHEN NOT EXISTS (SELECT 1 FROM link_type lt, obj s, obj d WHERE …) BEGIN
+  SELECT RAISE(ABORT, 'link_kind_mismatch');
+END;
+```
+
+스키마가 실제로 무엇을 막는지는 주석이 아니라 시험으로 확인합니다. `test/contract/test_schema.py`는 진짜 SQLite에 스키마를 적용하고 **68개 항목**을 검사합니다 — 스키마 6, 거부 30, 허용 22, 쿼리 플랜 4, 한국어 검색 5, v2 애드온 1. `accept 22/22`, `reject 30/30`이 CI에서 깨지면 스키마가 조용히 약해진 것입니다.
+
+발행은 "같은 스펙을 두 번 보내지 않는다"가 핵심입니다. 판정 기준은 스펙의 내용 해시입니다. 발행 시각처럼 읽는 사람이 보지 않는 값은 빼고, 화면·핀·문서·Figma 링크처럼 보는 값만 넣습니다.
+
+```ts
+// packages/publish/src/spec.ts — 발췌
+export function specFingerprint(input: { screen: Screen; pins: readonly Pin[]; figmaUrl: string | null; doc?: Doc | null }): string {
+  const canonical = JSON.stringify({
+    doc: /* 제목·rev·문단 타입/본문/인용 핀 id */,
+    screen: { id, code, title, ref, figmaUrl, viewport },
+    pins: /* 번호·타입·제목·본문·anchor, 번호순 */,
+  });
+  return createHash('sha256').update(canonical).digest('hex').slice(0, 24);
+}
+```
+
+판정은 세 갈래입니다.
+
+| 상황 | 동작 |
+| --- | --- |
+| 같은 스펙이 같은 스페이스에 이미 성공 발행됨 | `skip` — 페이지를 만들지 않는다 |
+| 이 프로젝트가 그 스페이스에 발행한 페이지가 있음 | `update` — 그 페이지를 갱신 |
+| 처음 | `create` — 한 페이지 + 첨부 3종 |
+
+발행 기록은 네트워크 호출 **전에** `intent`로 먼저 씁니다. 중간에 프로세스가 죽어도 "무엇을 하려 했는지"가 남고, 성공하면 `ok`, 실패하면 `failed`로 갱신합니다. `(target, idem_key)` 유니크 인덱스가 재시작 뒤의 중복 발행을 막습니다. 발행물은 Confluence REST v2 페이지 + v1 첨부 3종(오버레이 PNG·자기완결 HTML·QA CSV)이고, 본문은 Storage Format입니다.
+
+## 10. LLM 제안 — 프롬프트가 계약이고, 키는 요청 안에서만 산다
+
+v1 후반의 주제는 "모델이 제안하고, 결정 카드는 그대로"였습니다. 모델은 문서를 직접 고치지 않습니다. 초안을 만들고, 사람이 채택해야 반영됩니다.
+
+전송은 두 갈래뿐입니다. Anthropic Messages API와 OpenAI 호환 Chat Completions. SDK는 쓰지 않았습니다. `fetch` 한 번이면 충분하고, 커스텀 base URL이 1급 필드이기 때문에 로컬 모델 서버나 테스트 더블도 같은 코드 경로로 붙습니다.
+
+```ts
+function endpointFor(provider, endpoint) {
+  const base = endpoint?.trim() ? endpoint.trim() : AI_DEFAULT_ENDPOINTS[provider];
+  return provider === 'anthropic' ? joinUrl(base, '/v1/messages') : joinUrl(base, '/chat/completions');
+}
+```
+
+프롬프트는 계약을 소리 내어 읽은 것입니다. 핀 번호와 내용, 그래프에 이미 있는 제목, 문서 문단 id, 그리고 정확한 JSON 모양을 한 번에 넣습니다. 툴 호출 스키마에 기대지 않는 이유는, 커스텀 Endpoint가 툴도 strict JSON 모드도 지원하지 않는 작은 로컬 모델일 수 있기 때문입니다.
+
+그래서 **모양은 답을 받은 뒤에 검증**합니다. 답에서 BOM·코드펜스·앞뒤 설명을 걸러내고 첫 여는 중괄호부터 마지막 닫는 중괄호까지를 꺼낸 다음, zod 스키마로 파싱합니다.
+
+```ts
+export function parseGraphDraft(text: string): AiGraphDraft {
+  const parsed = AiGraphDraftSchema.safeParse(extractJsonObject(text));
+  if (!parsed.success) {
+    throw new AiDraftError(`모델 응답이 초안 스키마와 맞지 않습니다. ${issuesOf(parsed.error).join(' / ')}`);
+  }
+  return parsed.data;
+}
+```
+
+스키마를 통과한 뒤에도 프로젝트가 뒷받침하지 못하는 것은 카드에 싣지 않습니다. 없는 핀 번호를 인용한 초안은 그 인용이 버려지고, 화면에 없는 `pin:9`를 가리키는 링크는 끊깁니다. 환각이 `채택` 버튼까지 도달하지 못하게 하는 마지막 겹입니다.
+
+```ts
+// 인용은 화면이 실제로 가진 핀에서만 고른다 — 없는 번호는 버린다
+const cited = draftNode.pins.map((number) => pinsByNumber.get(number)).find((pin) => pin !== undefined);
+```
+
+키의 수명은 한 요청입니다. `AI 설정`은 키를 창 메모리에만 두고, 데몬은 요청 본문의 키를 헤더에 넣어 보낸 뒤 버립니다. SQLite에도, localStorage에도, 로그에도 남기지 않습니다. `GET /api/ai`는 키가 있는지 여부만 불리언으로 답합니다. 이 약속은 문장이 아니라 테스트로 잠갔습니다.
+
+```ts
+it('never writes the key to the SQLite file', async () => {
+  // … 'sk-ui-secret-key'로 한 번 제안을 만든 뒤
+  expect(bytes.includes(Buffer.from('sk-ui-secret-key'))).toBe(false);
+});
+```
+
+키가 없으면 실패가 아니라 폴백입니다. 로컬 규칙 추출기가 같은 모양의 초안을 만들고, 카드 배지가 `로컬 규칙`이라고 말합니다. 프로바이더 오류는 502, 초안 파싱 오류는 422로 갈라 보내고, 오류 메시지에서도 키를 지웁니다(`redact`).
+
+## 11. 골든셋 30건 — 임계치가 있는 eval
+
+"모델이 쓸 만한가"를 감으로 판단하지 않으려고 한국어 화면설계서 문장 30건을 골든셋으로 고정했습니다. 정책 10 · 표/계약 10 · 예외 10입니다. 케이스는 코드가 아니라 JSON입니다 — 기대 타입, 기대 링크, 근거 핀 번호가 데이터로 들어 있습니다.
+
+| 열 | 뜻 | 임계치 |
+| --- | --- | --- |
+| 스키마 | 제안이 `GraphProposal`로 파싱되고 노드가 있음 | 100% |
+| 타입 | 기대 노드 타입 재현율 | ≥ 85% |
+| 링크 | 기대 링크 타입 재현율 | ≥ 85% |
+| 핀근거 | 기대 핀 인용 재현율 | ≥ 90% |
+| 근거비율 | 초안 중 실제 핀을 인용한 비율 | ≥ 90% |
+
+`--mock`은 폴백 규칙 추출기를 측정합니다(결정적, 네트워크 없음, CI가 도는 것). `--live`는 같은 케이스를 실제 모델로 잽니다. 이 저장소에서 지금 돌린 mock 결과입니다.
+
+```text
+골든셋 30건 — exception 10 · policy 10 · table 10
+합계     스키마 100% · 타입 93% · 링크 92% · 핀근거 100% · 근거비율 100%
+임계치   100%     ≥85%      ≥85%      ≥90%       ≥90%
+PASS — 30건이 임계치를 넘었습니다.
+```
+
+93%와 92%가 어디서 깎였는지도 알고 있습니다. POL-07·TAB-06·EXC-09 세 건은 정책·표·예외 문장이 **`function` 핀 안에** 들어 있는 케이스입니다. 규칙 추출기는 핀 타입을 그대로 믿으므로, 기능 핀에서 정책을 읽어내지 못합니다. 이 세 건이 정확히 0%를 받아 평균을 끌어내립니다. 의도적으로 어렵게 쓴 케이스이고, `--live`가 움직여야 할 지점입니다.
+
+이 환경에는 실제 API 키가 없어서 `--live`는 돌리지 못했습니다. 대신 `eval/README.md`에 실행법을 남겼고, 러너는 키가 없으면 `--live`를 거부합니다. 숫자를 꾸미는 것보다 "무엇을 아직 모르는지"를 남기는 편이 낫다고 봤습니다.
+
+## 12. 라이브 데모 — 정적 번들이 데몬 없이 도는 이유
+
+데모는 [developjik.github.io/spec-studio](https://developjik.github.io/spec-studio/)에 있습니다. `main` 푸시마다 `.github/workflows/deploy-pages.yml`이 `VITE_BASE=/spec-studio/`로 웹 번들을 빌드해 Pages에 올립니다. 정적 호스팅에서 base 경로를 틀리면 페이지는 뜨고 asset만 404가 나서 흰 화면이 됩니다. 그래서 빌드 산출물의 asset 경로까지 확인합니다.
+
+데모에서 데몬을 부르지 않는 것은 제약이 아니라 구조입니다. https 공개 페이지가 `http://127.0.0.1:8787`을 부르면 혼합 콘텐츠로 막힙니다. 그래서 데모는 처음부터 `브라우저 임시 모드`로 열고, 프로젝트는 그 브라우저의 localStorage에만 남습니다.
+
+```ts
+export function daemonProbeAllowed(): boolean {
+  if (import.meta.env.VITE_SPEC_STUDIO_DAEMON !== undefined) return true;  // 명시 설정이 있으면 시도
+  return LOOPBACK_HOSTS.has(window.location.hostname);                      // 로컬에서만 프로브
+}
+```
+
+데모에서 되는 것: 샘플 화면에 핀 찍기, 문서 쓰기, 그래프·RTM 보기, 출력 3종 미리보기, 로컬 규칙 제안. 데모에서 안 되는 것: SQLite 저장, LLM 제안, Confluence 발행. 그 셋은 `pnpm daemon`으로 로컬에서 띄워야 합니다. 화면의 상단 바가 `SQLite 데몬 연결됨`과 `브라우저 임시 모드`를 구분해 말하는 이유입니다.
+
+## 13. 검증 — 다시 돌린 숫자
+
+글을 쓰기 전에 저장소에서 그대로 다시 돌린 값입니다.
+
+```text
+pnpm test:unit   → 157 passed (15 files: protocol 14 · ai 14 · core 64 · publish 12 · store 35 · daemon 18)
+pnpm eval        → PASS, 30 cases (스키마 100% · 타입 93% · 링크 92% · 핀근거 100% · 근거비율 100%)
+pnpm build       → web JS 467.12 kB (gzip 140.90) · CSS 41.91 kB (gzip 8.22) · daemon 944.5 kB
+pnpm dep:check   → 104 modules / 217 dependencies, 위반 0
+pnpm test:contract → PASS, 68 checks (schema 6 · reject 30 · accept 22 · plan 4 · search 5 · v2 1)
+```
+
+E2E는 별도 스크립트 넷으로 남겨 두었습니다 — `test/e2e/run_w3.sh`(Confluence 발행), `run_w4.sh`(문서·핀 양방향 점프·revert), `run_v1.sh`(그래프·L0–L2·export/import), `run_p2.sh`(모의 LLM + AI 설정). 넷 다 데몬과 Vite 프리뷰를 실제로 띄우고 Playwright로 화면을 확인합니다. 발행 쪽은 모의 Confluence 서버가 상태를 들고 있어서 페이지 생성·갱신·같은 스펙 skip을 실제 HTTP 경로로 검증합니다.
+
+## 14. 남긴 판단
+
+일부러 정하지 않고 남긴 것들입니다. 다음에 다시 계산하지 않으려고 적어 둡니다.
+
+- **한 프로젝트에 화면 하나.** v1은 "한 화면, 다섯 핀, 세 개의 출력"으로 좁힌 결과입니다. 새 화면을 붙이면 번호 공간과 문서가 새로 시작합니다. 여러 화면을 한 프로젝트에 담는 것은 데이터 모델을 바꾸는 일이라 v1에서 하지 않았습니다.
+- **Confluence만 발행한다.** `publish_record.target`에는 `notion`·`jira`·`local`이 있지만, 클라이언트를 구현한 것은 Confluence 하나입니다. 스키마에 자리를 둔 것과 기능이 있는 것은 다릅니다.
+- **Figma는 링크만.** 프레임 URL을 저장하고 발행 본문에 싣지만, API로 읽지 않습니다. 읽기 연동은 인증·레이트리밋·캐시를 끌고 오고, v1의 약속(3분 안에 시작)과 맞지 않습니다.
+- **FTS5는 선택.** Node가 함께 배포하는 SQLite에 FTS5가 없을 수 있어서 검색 인덱스는 스키마의 선택 구역입니다. 없으면 검색이 빠질 뿐 프로젝트·화면·핀은 그대로 저장됩니다.
+- **`--live` eval은 미실행.** 이 환경에 실제 API 키가 없습니다. mock 게이트는 통과했지만, 실제 모델의 숫자는 아직 모릅니다.
+- **양방향 발행은 없다.** 원격에서 고친 내용은 정본을 바꾸지 않습니다. 필요해지면 "원격 diff를 제안 카드로 가져오기"가 다음 후보이고, 자동 병합은 후보가 아닙니다.
+- **혼자 쓴 하루다.** 실제 디자이너·기획자가 이 툴로 문서를 넘긴 적은 아직 없습니다. 핀 문법이 시장의 빈 자리라는 것은 조사 결론이지 검증된 사실이 아닙니다.
+
+## 15. 마치며
+
+이 프로젝트에서 가장 오래 붙잡은 것은 화면이 아니라 **정본이 어디인가**였습니다. 정본을 로컬 파일 하나로 정하자, 그 위의 모든 결정이 단순해졌습니다. 번호는 세는 대신 기록하면 불변이 되고, 인용은 지문을 들고 있으면 stale이 되고, 발행은 해시를 들고 있으면 멱등이 됩니다. 외부 도구는 전부 사본을 받는 쪽으로 밀려납니다.
+
+기획 툴을 만들면서 배운 건, **올인원은 기능을 많이 넣는 일이 아니라 사슬을 하나 닫는 일**이라는 것입니다. 문제 → 정책 → 화면 → 계약 → 검증이라는 다섯 칸을 잇는 데 필요한 것만 남기고 나니, 하루 만에 4주 분량의 Wedge가 끝났습니다. 남은 것은 그 사슬을 실제 기획자에게 통과시키는 일입니다.
