@@ -23,8 +23,9 @@ const featured = FEATURED_POSTS.map((slug) => posts.find((p) => p.id === slug)).
 const latest = posts.slice(0, 7);
 const flagship = SERIES['frontend-ai-ops'];
 const flagshipCount = series.find((s) => s.id === 'frontend-ai-ops')?.count ?? 0;
-// 2026-11 시리즈 통합: 24편 원문을 5편 통합편으로 재편(기획안 확정). 완결 목표 5편.
-const seriesGoal = 5;
+// 목표값은 SERIES 정의(goal)를 따른다 — 페이지마다 하드코딩하지 않는다.
+const seriesGoal = flagship.goal ?? flagshipCount;
+const flagshipDone = flagshipCount >= seriesGoal;
 
 const jsonLd = JSON.stringify([
   {
@@ -128,7 +129,7 @@ const jsonLd = JSON.stringify([
       >
         <div class="relative grid gap-8 md:grid-cols-[1.5fr_1fr] md:items-center">
           <div>
-            <p class="kicker mb-3">연재 중 · {flagshipCount}편</p>
+            <p class="kicker mb-3">{flagshipDone ? '완결' : '연재 중'} · {flagshipCount}편</p>
             <h2 class="font-display text-2xl font-bold leading-snug tracking-tight transition-colors group-hover:text-accent md:text-[1.8rem]">
               {flagship.title}
             </h2>

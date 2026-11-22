@@ -1,6 +1,5 @@
 import { defineConfig } from 'astro/config';
 import mdx from '@astrojs/mdx';
-import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
 import pagefind from 'astro-pagefind';
 import tailwindcss from '@tailwindcss/vite';
@@ -37,7 +36,7 @@ export default defineConfig({
     '/posts/frontend-ai-portfolio-impact-metrics-playbook': '/posts/frontend-ai-proof-of-work',
     '/posts/frontend-ai-impact-portfolio-playbook': '/posts/frontend-ai-proof-of-work',
   },
-  integrations: [mdx(), react(), sitemap(), pagefind()],
+  integrations: [mdx(), sitemap(), pagefind()],
   vite: {
     plugins: [tailwindcss()],
   },

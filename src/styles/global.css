@@ -1,9 +1,10 @@
 @import "tailwindcss";
 
 /* ============================================================
-   developjik.dev — paper & ink editorial design system
-   light-first · Noto Serif KR + Pretendard + JetBrains Mono
-   종이 위의 기술 문집: 헤어라인, 세리프, 잉크 스탬프 액센트
+   developjik.dev — v3 프리시전 다크 디자인 시스템 (reset v3)
+   dark 기본(#0E0E0E + 라임 #C4F542) · 라이트(종이) 토글 유지
+   Pretendard 통일 + JetBrains Mono · 미세모션 토큰(--dur/--ease)
+   3D 스테이지(three.js)는 홈 전용 동적 로드
    ============================================================ */
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));

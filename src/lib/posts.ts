@@ -8,6 +8,8 @@ export type SeriesInfo = {
   short: string
   description: string
   accent: string
+  /** 완결 목표 편수. 미지정 시 count를 목표로 한다(항상 완결). */
+  goal?: number
 }
 
 export const SERIES: Record<string, SeriesInfo> = {
@@ -18,11 +20,15 @@ export const SERIES: Record<string, SeriesInfo> = {
     description:
       'AI 코딩 시대에 프론트엔드 개발자가 살아남는 방법은 생성이 아니라 검증과 운영입니다. E2E Eval, 온콜 드릴, 공급망 대응, 변경 실패율(CFR) 관리까지 — 면접과 포트폴리오에 바로 쓰는 운영 플레이북.',
     accent: '#1f6a4d',
+    // 2026-11 시리즈 통합: 24편 원문을 5편 통합편으로 재편(완결 목표 5편)
+    goal: 5,
   },
 }
 
 export function seriesIdOf(slug: string): string | undefined {
-  if (slug.startsWith('frontend-ai-')) return 'frontend-ai-ops'
+  // 시리즈 통합편 + 시리즈 소속 실무 글만. 연말 회고(year-review)는 시리즈가 아니다.
+  if (slug.startsWith('frontend-ai-') && !slug.endsWith('-year-review'))
+    return 'frontend-ai-ops'
   return undefined
 }
 
