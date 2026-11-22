@@ -10,6 +10,10 @@ const posts = defineCollection({
     tags: z.array(z.string()).default([]),
     // 시리즈 ID. 미지정 시 lib/posts.ts의 slug 접두사 폴백이 적용된다.
     series: z.string().optional(),
+    // 시리즈 내 EP 순서(1부터). 미지정 시 발행일 순.
+    seriesPart: z.number().int().optional(),
+    // 수정일(업데이트 표시·JSON-LD dateModified). 미지정 시 date와 동일 취급.
+    updated: z.coerce.date().optional(),
   }),
 })
 

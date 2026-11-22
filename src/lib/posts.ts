@@ -23,6 +23,78 @@ export const SERIES: Record<string, SeriesInfo> = {
     // 2026-11 시리즈 통합: 24편 원문을 5편 통합편으로 재편(완결 목표 5편)
     goal: 5,
   },
+  'javascript-engine': {
+    id: 'javascript-engine',
+    title: '자바스크립트 엔진 완전정복',
+    short: 'JS Engine',
+    description:
+      '스코프와 호이스팅부터 this 바인딩, 프로토타입, 이벤트 루프, 비동기 처리까지 — 자바스크립트가 실제로 돌아가는 방식을 엔진 관점에서 하나씩 완전히 정리하는 시리즈.',
+    accent: '#c4a018',
+  },
+  'aws-fundamentals': {
+    id: 'aws-fundamentals',
+    title: '프론트엔드 개발자를 위한 AWS 입문',
+    short: 'AWS Basics',
+    description:
+      'IAM 계정 설계부터 EC2, Lambda, API Gateway, 데이터베이스 선택, CloudWatch 관찰까지 — 프론트엔드 개발자가 서비스를 직접 배포하고 운영하기 위해 필요한 AWS 최소 지식 세트.',
+    accent: '#d97e30',
+  },
+  'git-workflows': {
+    id: 'git-workflows',
+    title: 'Git 브랜칭 전략 완전정복',
+    short: 'Git Workflows',
+    description:
+      'Git Flow, GitHub Flow, GitLab Flow, 트렁크 기반 개발까지 — 각 브랜칭 전략이 어떤 팀 상황에서 태어났고 언제 선택해야 하는지 비교하며 정리하는 시리즈.',
+    accent: '#4d8dff',
+  },
+  'ai-coding-tools': {
+    id: 'ai-coding-tools',
+    title: 'AI 코딩 도구 관측소',
+    short: 'AI Coding Tools',
+    description:
+      'Claude Code, Codex, Cursor, 오픈소스 로컬 모델까지 — 매달 바뀌는 AI 코딩 도구 생태계를 실무 워크플로 관점에서 관측하고 비교하는 시리즈.',
+    accent: '#c4f542',
+  },
+  'web-performance': {
+    id: 'web-performance',
+    title: '웹 성능 실전 가이드',
+    short: 'Web Perf',
+    description:
+      'HTTP 캐싱, 폰트 로딩, INP, Lighthouse CI 예산 게이트까지 — 사용자가 체감하는 성능을 측정하고 릴리즈를 막아주는 실전 성능 공학.',
+    accent: '#e05252',
+  },
+  'react-deep': {
+    id: 'react-deep',
+    title: 'React 19와 동시성 렌더링',
+    short: 'React Deep',
+    description:
+      'React 19 Actions, 폼 처리, 동시성 렌더링, Error Boundary까지 — React의 최신 렌더링 모델을 바닥부터 이해하는 심층 노트.',
+    accent: '#57c7d4',
+  },
+  'state-management': {
+    id: 'state-management',
+    title: 'React 상태관리 설계 노트',
+    short: 'State',
+    description:
+      'Zustand와 Redux, 서버 상태와 클라이언트 상태의 경계, React Query/TanStack Query 설계까지 — 상태를 어디에 둘 것인가에 대한 실무 판단 노트.',
+    accent: '#a78bfa',
+  },
+  'nextjs-notes': {
+    id: 'nextjs-notes',
+    title: 'Next.js App Router 실전 노트',
+    short: 'Next.js',
+    description:
+      'Pages Router와 App Router의 선택, 서버·클라이언트 컴포넌트 경계, React Compiler 적용까지 — Next.js로 서비스를 만들며 남긴 실전 기록.',
+    accent: '#9ca3af',
+  },
+  'build-logs': {
+    id: 'build-logs',
+    title: '사이드 프로젝트 구축기',
+    short: 'Build Logs',
+    description:
+      '블로그 마이그레이션, spec-studio, 검색 엔진, 에이전트 데스크, 데이터 리포까지 — 실제로 배포한 사이드 프로젝트를 만들며 배운 것들의 구축 로그.',
+    accent: '#8fbf6a',
+  },
 }
 
 export function seriesIdOf(slug: string): string | undefined {
@@ -70,8 +142,13 @@ export async function getAllPosts(): Promise<Post[]> {
 
 export function getSeriesPosts(posts: Post[], seriesId: string): Post[] {
   return posts
-    .filter((p) => seriesIdOf(p.id) === seriesId)
-    .sort((a, b) => a.data.date.getTime() - b.data.date.getTime())
+    .filter((p) => seriesOf(p) === seriesId)
+    .sort(
+      (a, b) =>
+        (a.data.seriesPart ?? Number.MAX_SAFE_INTEGER) -
+          (b.data.seriesPart ?? Number.MAX_SAFE_INTEGER) ||
+        a.data.date.getTime() - b.data.date.getTime()
+    )
 }
 
 export function getAllSeries(
@@ -80,7 +157,8 @@ export function getAllSeries(
   return Object.values(SERIES)
     .map((s) => ({
       ...s,
-      count: posts.filter((p) => seriesIdOf(p.id) === s.id).length,
+      // 프론트매터 series 우선(seriesOf) — 접두사 폴백만으론 통합편/신규 시리즈를 못 잡는다.
+      count: posts.filter((p) => seriesOf(p) === s.id).length,
     }))
     .filter((s) => s.count > 0)
 }

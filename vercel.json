@@ -7,29 +7,940 @@
   "trailingSlash": false,
   "cleanUrls": true,
   "redirects": [
-    { "source": "/posts/frontend-ai-code-review-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-e2e-evals-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-ui-regression-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-delivery-scorecard-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-release-readiness-checklist", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-browser-testing-release-gate-playbook", "destination": "/posts/frontend-ai-quality-gates", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-prd-to-ticket-system", "destination": "/posts/frontend-ai-harness-and-contracts", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-context-contract-playbook", "destination": "/posts/frontend-ai-harness-and-contracts", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-pr-review-agent-guardrails", "destination": "/posts/frontend-ai-harness-and-contracts", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-harness-engineering-pr-quality", "destination": "/posts/frontend-ai-harness-and-contracts", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-spec-drift-guardrail-playbook", "destination": "/posts/frontend-ai-harness-and-contracts", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-debugging-runbook", "destination": "/posts/frontend-ai-oncall-runbooks", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-post-deploy-observability-runbook", "destination": "/posts/frontend-ai-oncall-runbooks", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-oncall-drill-playbook", "destination": "/posts/frontend-ai-oncall-runbooks", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-supply-chain-incident-playbook", "destination": "/posts/frontend-ai-oncall-runbooks", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-mcp-incident-triage-playbook", "destination": "/posts/frontend-ai-oncall-runbooks", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-migration-rehearsal-playbook", "destination": "/posts/frontend-ai-safe-changes", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-change-failure-rate-playbook", "destination": "/posts/frontend-ai-safe-changes", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-design-system-safe-rollout-playbook", "destination": "/posts/frontend-ai-safe-changes", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-interview-proof-logbook", "destination": "/posts/frontend-ai-proof-of-work", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-interview-ready-pr-playbook", "destination": "/posts/frontend-ai-proof-of-work", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-hiring-task-runbook", "destination": "/posts/frontend-ai-proof-of-work", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-portfolio-impact-metrics-playbook", "destination": "/posts/frontend-ai-proof-of-work", "statusCode": 301 },
-    { "source": "/posts/frontend-ai-impact-portfolio-playbook", "destination": "/posts/frontend-ai-proof-of-work", "statusCode": 301 }
+    {
+      "source": "/tags/Accessibility",
+      "destination": "/tags/접근성",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Tools",
+      "destination": "/tags/DX",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Evals",
+      "destination": "/tags/AI",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/LLM-as-judge",
+      "destination": "/tags/AI",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Agents",
+      "destination": "/tags/에이전트",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/PR",
+      "destination": "/tags/Git",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Code-Review",
+      "destination": "/tags/품질",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/코딩에이전트",
+      "destination": "/tags/에이전트",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Cursor",
+      "destination": "/tags/에이전트",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/GitHub-Copilot",
+      "destination": "/tags/에이전트",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Claude-Code",
+      "destination": "/tags/에이전트",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/개발워크플로",
+      "destination": "/tags/DX",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Developer-Experience",
+      "destination": "/tags/DX",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/API-Gateway",
+      "destination": "/tags/AWS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Serverless",
+      "destination": "/tags/서버리스",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/REST-API",
+      "destination": "/tags/AWS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/WebSocket",
+      "destination": "/tags/웹-플랫폼",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Lambda",
+      "destination": "/tags/AWS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/CloudWatch",
+      "destination": "/tags/AWS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/모니터링",
+      "destination": "/tags/관측성",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/observability",
+      "destination": "/tags/관측성",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/EC2",
+      "destination": "/tags/AWS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/IaaS",
+      "destination": "/tags/인프라",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/IAM",
+      "destination": "/tags/AWS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Identity-and-Access-Management",
+      "destination": "/tags/AWS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Cloud-Computing",
+      "destination": "/tags/인프라",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/RDS",
+      "destination": "/tags/AWS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/DynamoDB",
+      "destination": "/tags/AWS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/NoSQL",
+      "destination": "/tags/AWS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Nextra",
+      "destination": "/tags/Astro",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/SSG",
+      "destination": "/tags/Next.js",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Web-API",
+      "destination": "/tags/웹-플랫폼",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Browser",
+      "destination": "/tags/브라우저",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Communication",
+      "destination": "/tags/웹-플랫폼",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/BroadcastChannel",
+      "destination": "/tags/웹-플랫폼",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Multi-Tab",
+      "destination": "/tags/웹-플랫폼",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Playwright",
+      "destination": "/tags/테스트",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/CDP",
+      "destination": "/tags/웹-플랫폼",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Rendering",
+      "destination": "/tags/브라우저",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Claude",
+      "destination": "/tags/에이전트",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Anthropic",
+      "destination": "/tags/에이전트",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/AI-코딩",
+      "destination": "/tags/에이전트",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Codex",
+      "destination": "/tags/에이전트",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Frontend",
+      "destination": "/tags/프론트엔드",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Performance",
+      "destination": "/tags/성능",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/CloudFront",
+      "destination": "/tags/AWS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/CDN",
+      "destination": "/tags/AWS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Web-Optimization",
+      "destination": "/tags/성능",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/이직-준비",
+      "destination": "/tags/이직",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Architecture",
+      "destination": "/tags/아키텍처",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Layout",
+      "destination": "/tags/CSS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/DeepSeek",
+      "destination": "/tags/LLM",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Stylelint",
+      "destination": "/tags/CSS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Design-System",
+      "destination": "/tags/CSS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Tokens",
+      "destination": "/tags/CSS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/DevOps",
+      "destination": "/tags/운영",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Error-Handling",
+      "destination": "/tags/React",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Testing",
+      "destination": "/tags/테스트",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/DDD",
+      "destination": "/tags/아키텍처",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Event-Storming",
+      "destination": "/tags/아키텍처",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Deployment",
+      "destination": "/tags/CI-CD",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Career",
+      "destination": "/tags/커리어",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/PR-리뷰",
+      "destination": "/tags/품질",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Observability",
+      "destination": "/tags/관측성",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Sentry",
+      "destination": "/tags/관측성",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/면접",
+      "destination": "/tags/이직",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/E2E",
+      "destination": "/tags/테스트",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/CFR",
+      "destination": "/tags/관측성",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Core-Web-Vitals",
+      "destination": "/tags/성능",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/XSS",
+      "destination": "/tags/보안",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/CSP",
+      "destination": "/tags/보안",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Security",
+      "destination": "/tags/보안",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Biome",
+      "destination": "/tags/품질",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Linting",
+      "destination": "/tags/품질",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Formatting",
+      "destination": "/tags/품질",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Git-Flow",
+      "destination": "/tags/CI-CD",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/branch",
+      "destination": "/tags/Git",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Web-Development",
+      "destination": "/tags/프론트엔드",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Git-Worktree",
+      "destination": "/tags/Git",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/GitHub",
+      "destination": "/tags/Git",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Pull-Request",
+      "destination": "/tags/Git",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/GitLab",
+      "destination": "/tags/Git",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/GitLab-Flow",
+      "destination": "/tags/Git",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/HTTP",
+      "destination": "/tags/웹-플랫폼",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Network",
+      "destination": "/tags/웹-플랫폼",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Async",
+      "destination": "/tags/JavaScript",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Promise",
+      "destination": "/tags/JavaScript",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/AsyncAwait",
+      "destination": "/tags/JavaScript",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Callback",
+      "destination": "/tags/JavaScript",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Event-Loop",
+      "destination": "/tags/JavaScript",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Concurrency",
+      "destination": "/tags/JavaScript",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Hoisting",
+      "destination": "/tags/JavaScript",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Prototype",
+      "destination": "/tags/JavaScript",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Inheritance",
+      "destination": "/tags/JavaScript",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/This",
+      "destination": "/tags/JavaScript",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Binding",
+      "destination": "/tags/JavaScript",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Scope",
+      "destination": "/tags/JavaScript",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Keycloak",
+      "destination": "/tags/보안",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/OAuth",
+      "destination": "/tags/보안",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/OIDC",
+      "destination": "/tags/보안",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/SSO",
+      "destination": "/tags/보안",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Tauri",
+      "destination": "/tags/Rust",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/CI",
+      "destination": "/tags/CI-CD",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Ollama",
+      "destination": "/tags/LLM",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/GGUF",
+      "destination": "/tags/LLM",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Model-Context-Protocol",
+      "destination": "/tags/MCP",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Modern-CSS",
+      "destination": "/tags/CSS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Build",
+      "destination": "/tags/Vite",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Monorepo",
+      "destination": "/tags/아키텍처",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Tooling",
+      "destination": "/tags/DX",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/React-Compiler",
+      "destination": "/tags/React",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/App-Router",
+      "destination": "/tags/Next.js",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Pages-Router",
+      "destination": "/tags/Next.js",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Server-Components",
+      "destination": "/tags/Next.js",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/SSR",
+      "destination": "/tags/Next.js",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Client-Components",
+      "destination": "/tags/Next.js",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/RSC",
+      "destination": "/tags/Next.js",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/성능-최적화",
+      "destination": "/tags/성능",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/MDX",
+      "destination": "/tags/Astro",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Auth",
+      "destination": "/tags/보안",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Open-Source",
+      "destination": "/tags/오픈소스",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/GLM",
+      "destination": "/tags/LLM",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Qwen",
+      "destination": "/tags/LLM",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/package.json",
+      "destination": "/tags/DX",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/npm",
+      "destination": "/tags/Node.js",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/의존성-관리",
+      "destination": "/tags/DX",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Semantic-Versioning",
+      "destination": "/tags/DX",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/uv",
+      "destination": "/tags/Python",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/venv",
+      "destination": "/tags/Python",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/React-19",
+      "destination": "/tags/React",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Concurrent-Rendering",
+      "destination": "/tags/React",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/startTransition",
+      "destination": "/tags/React",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Suspense",
+      "destination": "/tags/React",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Data-Fetching",
+      "destination": "/tags/상태관리",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Refactoring",
+      "destination": "/tags/품질",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Code-Quality",
+      "destination": "/tags/품질",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Zustand",
+      "destination": "/tags/상태관리",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/TanStack-Query",
+      "destination": "/tags/상태관리",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Signals",
+      "destination": "/tags/상태관리",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/SVG",
+      "destination": "/tags/CSS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Tailwind-CSS",
+      "destination": "/tags/CSS",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Electron",
+      "destination": "/tags/Rust",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/글쓰기",
+      "destination": "/tags/블로그",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Trunk-based-Development",
+      "destination": "/tags/Git",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Feature-Flags",
+      "destination": "/tags/CI-CD",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Continuous-Delivery",
+      "destination": "/tags/CI-CD",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Frontend-Architecture",
+      "destination": "/tags/아키텍처",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Domain-Modeling",
+      "destination": "/tags/아키텍처",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Edge-Runtime",
+      "destination": "/tags/Next.js",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Vercel",
+      "destination": "/tags/Next.js",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Middleware",
+      "destination": "/tags/Next.js",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Service-Worker",
+      "destination": "/tags/PWA",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/View-Transitions",
+      "destination": "/tags/웹-플랫폼",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/브라우저-API",
+      "destination": "/tags/웹-플랫폼",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Vitest",
+      "destination": "/tags/테스트",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Web-Components",
+      "destination": "/tags/웹-컴포넌트",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Speculation-Rules",
+      "destination": "/tags/웹-플랫폼",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Web-Vitals",
+      "destination": "/tags/성능",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/WGSL",
+      "destination": "/tags/WebGPU",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/브라우저-AI",
+      "destination": "/tags/온디바이스-AI",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Graphics",
+      "destination": "/tags/WebGPU",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/Blog",
+      "destination": "/tags/블로그",
+      "statusCode": 301
+    },
+    {
+      "source": "/tags/State",
+      "destination": "/tags/상태관리",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-code-review-playbook",
+      "destination": "/posts/frontend-ai-quality-gates",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-e2e-evals-playbook",
+      "destination": "/posts/frontend-ai-quality-gates",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-ui-regression-playbook",
+      "destination": "/posts/frontend-ai-quality-gates",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-delivery-scorecard-playbook",
+      "destination": "/posts/frontend-ai-quality-gates",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-release-readiness-checklist",
+      "destination": "/posts/frontend-ai-quality-gates",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-browser-testing-release-gate-playbook",
+      "destination": "/posts/frontend-ai-quality-gates",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-prd-to-ticket-system",
+      "destination": "/posts/frontend-ai-harness-and-contracts",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-context-contract-playbook",
+      "destination": "/posts/frontend-ai-harness-and-contracts",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-pr-review-agent-guardrails",
+      "destination": "/posts/frontend-ai-harness-and-contracts",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-harness-engineering-pr-quality",
+      "destination": "/posts/frontend-ai-harness-and-contracts",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-spec-drift-guardrail-playbook",
+      "destination": "/posts/frontend-ai-harness-and-contracts",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-debugging-runbook",
+      "destination": "/posts/frontend-ai-oncall-runbooks",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-post-deploy-observability-runbook",
+      "destination": "/posts/frontend-ai-oncall-runbooks",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-oncall-drill-playbook",
+      "destination": "/posts/frontend-ai-oncall-runbooks",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-supply-chain-incident-playbook",
+      "destination": "/posts/frontend-ai-oncall-runbooks",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-mcp-incident-triage-playbook",
+      "destination": "/posts/frontend-ai-oncall-runbooks",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-migration-rehearsal-playbook",
+      "destination": "/posts/frontend-ai-safe-changes",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-change-failure-rate-playbook",
+      "destination": "/posts/frontend-ai-safe-changes",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-design-system-safe-rollout-playbook",
+      "destination": "/posts/frontend-ai-safe-changes",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-interview-proof-logbook",
+      "destination": "/posts/frontend-ai-proof-of-work",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-interview-ready-pr-playbook",
+      "destination": "/posts/frontend-ai-proof-of-work",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-hiring-task-runbook",
+      "destination": "/posts/frontend-ai-proof-of-work",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-portfolio-impact-metrics-playbook",
+      "destination": "/posts/frontend-ai-proof-of-work",
+      "statusCode": 301
+    },
+    {
+      "source": "/posts/frontend-ai-impact-portfolio-playbook",
+      "destination": "/posts/frontend-ai-proof-of-work",
+      "statusCode": 301
+    }
   ]
 }

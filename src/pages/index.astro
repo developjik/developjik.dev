@@ -27,29 +27,39 @@ const flagshipCount = series.find((s) => s.id === 'frontend-ai-ops')?.count ?? 0
 const seriesGoal = flagship.goal ?? flagshipCount;
 const flagshipDone = flagshipCount >= seriesGoal;
 
-const jsonLd = JSON.stringify([
-  {
-    '@context': 'https://schema.org',
-    '@type': 'WebSite',
-    name: SITE.title,
-    url: SITE.url,
-    description: SITE.description,
-    inLanguage: 'ko',
-    author: { '@type': 'Person', name: SITE.author, url: SITE.github },
-  },
-  {
-    '@context': 'https://schema.org',
-    '@type': 'Blog',
-    name: SITE.title,
-    url: SITE.url,
-    blogPost: posts.slice(0, 10).map((p) => ({
-      '@type': 'BlogPosting',
-      headline: p.data.title,
-      datePublished: p.data.date.toISOString(),
-      url: new URL('/posts/' + p.id, SITE.url).href,
-    })),
-  },
-]);
+const jsonLd = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Person',
+      '@id': new URL('/#person', SITE.url).href,
+      name: SITE.author,
+      url: SITE.github,
+      knowsAbout: ['프론트엔드 엔지니어링', 'AI 에이전트', '웹 성능', '운영 플레이북'],
+    },
+    {
+      '@type': 'WebSite',
+      '@id': new URL('/#website', SITE.url).href,
+      name: SITE.title,
+      url: SITE.url,
+      description: SITE.description,
+      inLanguage: 'ko',
+      publisher: { '@id': new URL('/#person', SITE.url).href },
+    },
+    {
+      '@type': 'Blog',
+      '@id': new URL('/#blog', SITE.url).href,
+      name: SITE.title,
+      url: SITE.url,
+      blogPost: posts.slice(0, 10).map((p) => ({
+        '@type': 'BlogPosting',
+        headline: p.data.title,
+        datePublished: p.data.date.toISOString(),
+        url: new URL('/posts/' + p.id, SITE.url).href,
+      })),
+    },
+  ],
+});
 ---
 
 <BaseLayout jsonLd={jsonLd}>

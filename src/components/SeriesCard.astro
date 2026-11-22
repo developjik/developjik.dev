@@ -18,5 +18,5 @@ const { series } = Astro.props;
     </div>
     <span class="shrink-0 font-mono text-2xl text-accent opacity-60 transition-transform group-hover:translate-x-1" aria-hidden>→</span>
   </div>
-  <div class="series-bar mt-6"><div style={'width:' + Math.min(100, (series.count / 24) * 100) + '%'}></div></div>
+  <div class="series-bar mt-6"><div style={'width:' + Math.min(100, (series.count / (series.goal ?? series.count)) * 100) + '%'}></div></div>
 </a>
