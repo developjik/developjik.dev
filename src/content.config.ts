@@ -8,6 +8,8 @@ const posts = defineCollection({
     description: z.string().default(''),
     date: z.coerce.date(),
     tags: z.array(z.string()).default([]),
+    // 시리즈 ID. 미지정 시 lib/posts.ts의 slug 접두사 폴백이 적용된다.
+    series: z.string().optional(),
   }),
 })
 

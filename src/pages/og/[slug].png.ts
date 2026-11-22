@@ -25,11 +25,11 @@ export const getStaticPaths = (async () => {
 }) satisfies GetStaticPaths
 
 function template(opts: { kicker: string; title: string; meta: string }) {
-  const paper = '#f9f7f0'
-  const ink = '#1d1912'
-  const accent = '#1f6a4d'
-  const faint = '#918977'
-  const line = '#b9b096'
+  const paper = '#0e0e0e'
+  const ink = '#ededea'
+  const accent = '#c4f542'
+  const faint = '#8f8f8a'
+  const line = '#343434'
   return {
     type: 'div',
     props: {

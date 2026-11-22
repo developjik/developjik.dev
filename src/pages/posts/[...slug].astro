@@ -11,7 +11,7 @@ import {
   getSeriesPosts,
   readingMinutes,
   relatedPosts,
-  seriesIdOf,
+  seriesOf,
   SERIES,
   formatDate,
   isoDate,
@@ -27,7 +27,7 @@ const { post } = Astro.props;
 const { Content, headings } = await render(post);
 const minutes = readingMinutes(post.body ?? '');
 const allPosts = await getAllPosts();
-const seriesId = seriesIdOf(post.id);
+const seriesId = seriesOf(post);
 const series = seriesId ? SERIES[seriesId] : undefined;
 const seriesList = seriesId ? getSeriesPosts(allPosts, seriesId) : [];
 const epIndex = seriesList.findIndex((p) => p.id === post.id);
@@ -66,7 +66,7 @@ const jsonLd = JSON.stringify({
 
   <div class="shell relative pt-12 md:pt-16" id="top">
     <div class="mx-auto grid max-w-6xl gap-10 xl:grid-cols-[minmax(0,1fr)_15rem]">
-      <div class="mx-auto w-full max-w-[45rem] xl:mx-0">
+      <div class="mx-auto w-full max-w-(--prose-width) xl:mx-0">
         <article data-pagefind-body>
           <!-- header -->
           <header class="mb-10 border-b border-line pb-10">
@@ -157,7 +157,7 @@ const jsonLd = JSON.stringify({
       </aside>
     </div>
 
-    <div class="mx-auto mt-16 max-w-[45rem] border-t border-line pt-7 no-print">
+    <div class="mx-auto mt-16 max-w-(--prose-width) border-t border-line pt-7 no-print">
       <a href="/posts" class="font-mono text-xs text-faint transition-colors hover:text-accent">← 전체 글로 돌아가기</a>
     </div>
   </div>
@@ -208,6 +208,40 @@ const jsonLd = JSON.stringify({
           });
         }
       }
+
+      // code copy — .copy-btn CSS는 있었으나 버튼을 만드는 코드가 없어 죽어 있었다
+      document.querySelectorAll('pre.astro-code').forEach((pre) => {
+        if (pre.querySelector('.copy-btn')) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'copy-btn no-print';
+        btn.textContent = 'COPY';
+        btn.setAttribute('aria-label', '코드 복사');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code')?.innerText ?? '';
+          try {
+            await navigator.clipboard.writeText(code);
+          } catch {
+            const ta = document.createElement('textarea');
+            ta.value = code;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+          }
+          btn.dataset.copied = '1';
+          btn.textContent = 'OK';
+          btn.setAttribute('aria-label', '코드 복사됨');
+          setTimeout(() => {
+            delete btn.dataset.copied;
+            btn.textContent = 'COPY';
+            btn.setAttribute('aria-label', '코드 복사');
+          }, 1500);
+        });
+        pre.appendChild(btn);
+      });
 
       // copy link
       document.querySelectorAll('[data-copy-link]').forEach((btn) => {

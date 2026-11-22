@@ -1,0 +1,200 @@
+---
+/**
+ * BookStage — M3 라이트 3D 스테이지 (reset v3)
+ * three.js 책 더미 무대: 드래그 회전·휠 줌.
+ * 축소 정책: prefers-reduced-motion · 모바일(≤768px) · WebGL 불가 → CSS 정지 프레임으로 대체(three 미로드).
+ */
+interface Props {
+  /** 표시할 문구 */
+  kick: string;
+}
+const { kick } = Astro.props;
+---
+
+<div class="book-stage" data-book-stage aria-label="3D 책 무대 — 드래그로 회전" role="img">
+  <div class="book-fallback" data-book-fallback aria-hidden="true">
+    <div class="stack">
+      <i></i><i></i><i></i><i></i>
+    </div>
+    <p class="fb-note">{kick}</p>
+  </div>
+</div>
+
+<style>
+  .book-stage {
+    position: relative;
+    height: 330px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--line);
+    background: radial-gradient(130% 130% at 30% 15%, var(--raised), var(--code-bg));
+    overflow: hidden;
+    cursor: grab;
+    touch-action: pan-y;
+  }
+  .book-stage:active {
+    cursor: grabbing;
+  }
+  .book-stage canvas {
+    display: block;
+  }
+  .book-fallback {
+    position: absolute;
+    inset: 0;
+    display: none;
+    place-items: center;
+    perspective: 900px;
+  }
+  .book-stage.static .book-fallback {
+    display: grid;
+  }
+  .stack {
+    position: relative;
+    width: 110px;
+    height: 110px;
+    transform-style: preserve-3d;
+    transform: rotateX(-18deg) rotateY(28deg);
+  }
+  .stack i {
+    position: absolute;
+    inset: 0;
+    border: 1.5px solid var(--line-strong);
+    background: var(--accent-soft);
+  }
+  .stack i:nth-child(1) { transform: rotateY(0deg) translateZ(55px); }
+  .stack i:nth-child(2) { transform: rotateY(90deg) translateZ(55px); }
+  .stack i:nth-child(3) { transform: rotateY(180deg) translateZ(55px); }
+  .stack i:nth-child(4) { transform: rotateY(270deg) translateZ(55px); }
+  .fb-note {
+    position: absolute;
+    bottom: 14px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+</style>
+
+<script>
+  function initBookStages() {
+    document.querySelectorAll<HTMLElement>('[data-book-stage]').forEach((stage) => {
+      if (stage.dataset.initialized === '1') return;
+      stage.dataset.initialized = '1';
+
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const mobile = window.matchMedia('(max-width: 768px)').matches;
+      const glOk = (() => {
+        try {
+          const c = document.createElement('canvas');
+          return !!(c.getContext('webgl2') || c.getContext('webgl'));
+        } catch {
+          return false;
+        }
+      })();
+
+      // 축소 조건: 정지 프레임으로 대체 — three를 아예 로드하지 않는다
+      if (reduced || mobile || !glOk) {
+        stage.classList.add('static');
+        return;
+      }
+
+      import('three')
+        .then((THREE) => {
+          const w = stage.clientWidth;
+          const h = stage.clientHeight;
+          const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+          renderer.setSize(w, h);
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+          stage.appendChild(renderer.domElement);
+
+          const scene = new THREE.Scene();
+          const cam = new THREE.PerspectiveCamera(38, w / h, 0.1, 100);
+          cam.position.set(0, 2.6, 7.5);
+
+          scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+          const key = new THREE.DirectionalLight(0xffffff, 1.5);
+          key.position.set(4, 7, 5);
+          scene.add(key);
+          const accent = getComputedStyle(stage).getPropertyValue('--accent').trim() || '#c4f542';
+          const rim = new THREE.DirectionalLight(new THREE.Color(accent), 1.7);
+          rim.position.set(-6, 3, -4);
+          scene.add(rim);
+
+          // 책 더미
+          const group = new THREE.Group();
+          const ink = getComputedStyle(stage).getPropertyValue('--ink').trim() || '#ededea';
+          const bg = getComputedStyle(stage).getPropertyValue('--bg').trim() || '#0e0e0e';
+          const covers = [new THREE.Color(accent), new THREE.Color(ink), new THREE.Color(bg), new THREE.Color(ink), new THREE.Color(ink)];
+          for (let i = 0; i < 5; i++) {
+            const geo = new THREE.BoxGeometry(2.2 - i * 0.12, 0.34, 1.5 - i * 0.06);
+            const mat = new THREE.MeshStandardMaterial({ color: covers[i], roughness: 0.55, metalness: 0.08 });
+            const book = new THREE.Mesh(geo, mat);
+            book.position.y = 0.18 + i * 0.36;
+            book.rotation.y = i % 2 ? 0.1 : -0.12;
+            group.add(book);
+          }
+          // 궤도 링
+          const ring = new THREE.Mesh(
+            new THREE.TorusGeometry(3, 0.015, 8, 90),
+            new THREE.MeshBasicMaterial({ color: new THREE.Color(accent) }),
+          );
+          ring.rotation.x = Math.PI / 2.15;
+          group.add(ring);
+          scene.add(group);
+
+          // 드래그 회전 + 휠 줌
+          let dragging = false;
+          let px = 0;
+          let py = 0;
+          let vx = 0.004;
+          let vy = 0;
+          let vz = 0;
+          let dist = 7.5;
+          stage.addEventListener('pointerdown', (e) => {
+            dragging = true;
+            px = e.clientX;
+            py = e.clientY;
+            stage.setPointerCapture(e.pointerId);
+          });
+          stage.addEventListener('pointerup', () => {
+            dragging = false;
+          });
+          stage.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            vy = (e.clientX - px) * 0.00035 + vy * 0.9;
+            vz = (e.clientY - py) * 0.0006 + vz * 0.9;
+            px = e.clientX;
+            py = e.clientY;
+          });
+          stage.addEventListener(
+            'wheel',
+            (e) => {
+              e.preventDefault();
+              dist = Math.min(11, Math.max(5, dist + e.deltaY * 0.004));
+            },
+            { passive: false },
+          );
+
+          const loop = () => {
+            group.rotation.y += dragging ? vy : 0.004 + vy;
+            group.rotation.x = Math.max(-0.5, Math.min(0.5, group.rotation.x + (vz - group.rotation.x) * 0.08));
+            vy *= 0.96;
+            vz *= 0.9;
+            cam.position.z += (dist - cam.position.z) * 0.08;
+            ring.rotation.z += 0.002;
+            renderer.render(scene, cam);
+            requestAnimationFrame(loop);
+          };
+          loop();
+        })
+        .catch(() => {
+          stage.classList.add('static');
+        });
+    });
+  }
+  document.addEventListener('astro:page-load', initBookStages);
+  initBookStages();
+</script>

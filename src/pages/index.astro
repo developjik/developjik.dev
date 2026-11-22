@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '~/layouts/BaseLayout.astro';
+import BookStage from '~/components/BookStage.astro';
 import PostCard from '~/components/PostCard.astro';
 import PostRow from '~/components/PostRow.astro';
 import SectionHead from '~/components/SectionHead.astro';
@@ -9,8 +10,6 @@ import {
   tagCounts,
   getAllSeries,
   SERIES,
-  groupByYear,
-  formatDate,
   readingMinutes,
   tagSlug,
 } from '~/lib/posts';
@@ -18,7 +17,6 @@ import {
 const posts = await getAllPosts();
 const tags = tagCounts(posts);
 const series = getAllSeries(posts);
-const years = groupByYear(posts);
 const featured = FEATURED_POSTS.map((slug) => posts.find((p) => p.id === slug)).filter(
   (p): p is NonNullable<typeof p> => Boolean(p),
 );
@@ -27,7 +25,6 @@ const flagship = SERIES['frontend-ai-ops'];
 const flagshipCount = series.find((s) => s.id === 'frontend-ai-ops')?.count ?? 0;
 // 2026-11 시리즈 통합: 24편 원문을 5편 통합편으로 재편(기획안 확정). 완결 목표 5편.
 const seriesGoal = 5;
-const volume = new Date().getFullYear() - SITE.since + 1;
 
 const jsonLd = JSON.stringify([
   {
@@ -55,16 +52,39 @@ const jsonLd = JSON.stringify([
 ---
 
 <BaseLayout jsonLd={jsonLd}>
-  <!-- ============ 표제지 ============ -->
+  <!-- ============ 히어로 : M3 3D 스테이지 × M2 프리시전 다크 ============ -->
   <section class="border-b border-line">
-    <div class="shell grid gap-12 py-16 md:py-24 lg:grid-cols-[1.2fr_0.8fr] lg:gap-20">
+    <div class="shell grid items-center gap-10 py-14 md:py-20 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
+      <div data-reveal>
+        <BookStage kick={`${posts.length} posts · drag to rotate`} />
+      </div>
+
       <div>
-        <p class="kicker mb-6" data-reveal>agent-era frontend journal</p>
+        <p class="kicker mb-6" data-reveal>agent-era frontend engineer</p>
         <h1 class="hero-title text-balance" data-reveal>
-          프론트엔드 엔지니어,<br />
-          <span class="accent">에이전트 시대</span>를<br class="sm:hidden" />
-          기록합니다
+          책 무대 위의<br />
+          <span class="accent">{posts.length}편</span> 기록
         </h1>
+
+        <div class="mt-8 flex items-end gap-4" data-reveal>
+          <p
+            class="font-mono text-6xl leading-none font-bold tracking-tighter tabular"
+            data-post-counter
+            data-count={posts.length}
+            aria-label={`전체 글 ${posts.length}편`}
+          >
+            0
+          </p>
+          <div class="pb-1">
+            <p class="font-mono text-[0.68rem] tracking-[0.16em] text-faint">
+              POSTS · {flagshipCount} EPISODES
+            </p>
+            <p class="mt-1 font-mono text-[0.68rem] tracking-[0.16em] text-faint">
+              {tags.length} TAGS · EST. {SITE.since}
+            </p>
+          </div>
+        </div>
+
         <p class="lede mt-7 max-w-xl" data-reveal>
           AI가 코드를 쓰는 시대에 개발자의 일은 검증과 운영으로 옮겨갑니다.
           실무에서 바로 쓰는 운영 플레이북과 웹 플랫폼 노트를 {posts.length}편 기록했습니다.
@@ -84,47 +104,9 @@ const jsonLd = JSON.stringify([
           </button>
         </div>
       </div>
-
-      <!-- 색인 카드 : 표지 안의 목차 -->
-      <aside class="card self-start p-7 md:p-8" data-reveal aria-label="블로그 색인">
-        <div class="index-head">
-          <p class="kicker">Index</p>
-          <p class="font-mono text-[0.62rem] tracking-[0.16em] text-faint">VOL.{volume}</p>
-        </div>
-        <nav class="mt-2" aria-label="블로그 색인">
-          <a href="/posts" class="index-row">
-            <span class="no">01</span>
-            <span class="label">전체 글</span>
-            <span class="count tabular">{posts.length}</span>
-          </a>
-          <a href="/series" class="index-row">
-            <span class="no">02</span>
-            <span class="label">시리즈</span>
-            <span class="count tabular">{flagshipCount}편 연재</span>
-          </a>
-          <a href="/tags" class="index-row">
-            <span class="no">03</span>
-            <span class="label">태그</span>
-            <span class="count tabular">{tags.length}</span>
-          </a>
-          <a href="/archives" class="index-row">
-            <span class="no">04</span>
-            <span class="label">아카이브</span>
-            <span class="count tabular">{years.length}개 연도</span>
-          </a>
-          <a href="/about" class="index-row">
-            <span class="no">05</span>
-            <span class="label">소개</span>
-            <span class="count" aria-hidden>→</span>
-          </a>
-        </nav>
-        <p class="mt-5 border-t border-line pt-4 font-mono text-[0.68rem] leading-relaxed text-faint">
-          {posts[posts.length - 1] ? formatDate(posts[posts.length - 1].data.date) : ''} — ongoing
-          · 최근 업데이트 {posts[0] ? formatDate(posts[0].data.date) : ''}
-        </p>
-      </aside>
     </div>
   </section>
+
 
   <!-- ============ 표제 글 ============ -->
   <section class="section">
@@ -191,5 +173,31 @@ const jsonLd = JSON.stringify([
         ))}
       </div>
     </div>
+
   </section>
+
+<script>
+  // M2 카운터 틱 — reduced-motion 즉시 표시
+  function initPostCounter() {
+    document.querySelectorAll<HTMLElement>('[data-post-counter]').forEach((el) => {
+      if (el.dataset.done === '1') return;
+      el.dataset.done = '1';
+      const target = Number(el.dataset.count ?? '0');
+      if (Number.isNaN(target)) return;
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        el.textContent = String(target);
+        return;
+      }
+      const t0 = performance.now();
+      const step = (t: number) => {
+        const k = Math.min(1, (t - t0) / 900);
+        el.textContent = String(Math.round(target * (1 - Math.pow(1 - k, 3))));
+        if (k < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+  }
+  document.addEventListener('astro:page-load', initPostCounter);
+  initPostCounter();
+</script>
 </BaseLayout>

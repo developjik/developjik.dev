@@ -56,15 +56,16 @@ const pageTitle = title === SITE.name ? SITE.title : title + ' — ' + SITE.name
       if (saved === 'light' || saved === 'dark') {
         theme = saved;
       } else {
-        theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        // reset v3: 프리시전 다크가 기본 테마
+        theme = 'dark';
       }
     }
   } catch (e) {}
   document.documentElement.dataset.theme = theme;
 })();
 </script>
-<meta name="theme-color" content="#16140e" media="(prefers-color-scheme: dark)" />
-<meta name="theme-color" content="#f9f7f0" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#0e0e0e" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)" />
 
 <!-- open graph -->
 <meta property="og:type" content={type} />
