@@ -23,6 +23,18 @@ GitHub 프로필과 통일된 브랜드(#0e1116 / #4d8dff), Pretendard + Space G
 - 뷰 트랜지션(Astro ClientRouter), 모바일 완전 대응
 - RSS(/rss.xml), sitemap, robots, JSON-LD(BlogPosting/WebSite/Blog)
 
+## 측정 (2026-11)
+
+토큰 기반 env 게이트 — 미설정 시 스크립트/메타 미렌더 (0바이트):
+
+| env | 용도 | 발급 |
+| --- | --- | --- |
+| `PUBLIC_GSC_VERIFICATION` | Google Search Console 소유 확인 메타 | GSC > URL 접두어 > HTML 태그 |
+| `PUBLIC_BING_VERIFICATION` | Bing Webmaster 소유 확인 메타 | Bing > GSC에서 가져오기 |
+| `PUBLIC_CF_BEACON_TOKEN` | Cloudflare Web Analytics 비컨 (무료·쿠키 없음) | CF 대시보드 > Web Analytics |
+
+Vercel Project Settings > Environment Variables에 넣고 재배포하면 켜진다.
+
 ## 개발
 
 ```bash
