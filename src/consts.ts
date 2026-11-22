@@ -7,7 +7,8 @@ export const SITE = {
   // 실제로 서빙되는 Vercel 프로덕션 URL을 쓴다.
   url: 'https://developjik-nextra-blog.vercel.app',
   author: 'developjik',
-  email: 'developjik@developjik.dev',
+  // 문의 채널은 GitHub 이슈로 통일(푸터 안내 문구와 동일). developjik.dev 도메인 미보유로
+  // 메일 주소는 표기하지 않는다.
   github: 'https://github.com/developjik',
   repo: 'https://github.com/developjik/developjik.dev',
   since: 2024,

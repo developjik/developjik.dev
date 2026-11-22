@@ -4,7 +4,7 @@ import BaseLayout from '~/layouts/BaseLayout.astro';
 import Toc from '~/components/Toc.astro';
 import ShareButtons from '~/components/ShareButtons.astro';
 import PostCard from '~/components/PostCard.astro';
-import Giscus from '~/components/Giscus.tsx';
+import Giscus from '~/components/Giscus.astro';
 import { SITE } from '~/consts';
 import {
   getAllPosts,
@@ -35,21 +35,32 @@ const prevEp = epIndex > 0 ? seriesList[epIndex - 1] : undefined;
 const nextEp = epIndex >= 0 && epIndex < seriesList.length - 1 ? seriesList[epIndex + 1] : undefined;
 const related = relatedPosts(post, allPosts, 3);
 const postUrl = new URL('/posts/' + post.id, SITE.url).href;
+const authorId = new URL('/#person', SITE.url).href;
+const dateModified = (post.data.updated ?? post.data.date).toISOString();
+// 브래드크럼: 홈 > 전체 글 > (시리즈) > 제목
+const breadcrumbItems = [
+  { '@type': 'ListItem', position: 1, name: '홈', item: new URL('/', SITE.url).href },
+  ...(series ? [{ '@type': 'ListItem', position: 2, name: '시리즈', item: new URL('/series', SITE.url).href }, { '@type': 'ListItem', position: 3, name: series.title, item: new URL('/series/' + series.id, SITE.url).href }] : [{ '@type': 'ListItem', position: 2, name: '전체 글', item: new URL('/posts', SITE.url).href }]),
+  { '@type': 'ListItem', position: series ? 4 : 3, name: post.data.title, item: postUrl },
+];
 
 const jsonLd = JSON.stringify({
   '@context': 'https://schema.org',
   '@type': 'BlogPosting',
+  '@id': postUrl + '#article',
   headline: post.data.title,
   description: post.data.description,
   datePublished: post.data.date.toISOString(),
-  dateModified: post.data.date.toISOString(),
+  dateModified,
   inLanguage: 'ko',
   keywords: post.data.tags.join(', '),
-  author: { '@type': 'Person', name: SITE.author, url: SITE.github },
-  publisher: { '@type': 'Person', name: SITE.author },
+  author: { '@type': 'Person', name: SITE.author, url: SITE.github, '@id': authorId },
+  publisher: { '@type': 'Person', name: SITE.author, '@id': authorId },
+  isPartOf: { '@type': 'Blog', '@id': new URL('/#blog', SITE.url).href, name: SITE.title },
   mainEntityOfPage: { '@type': 'WebPage', '@id': postUrl },
   image: new URL('/og/' + post.id + '.png', SITE.url).href,
   wordCount: (post.body ?? '').length,
+  breadcrumb: { '@type': 'BreadcrumbList', itemListElement: breadcrumbItems },
 });
 ---
 
@@ -89,6 +100,12 @@ const jsonLd = JSON.stringify({
             )}
             <div class="meta-row mt-7">
               <time datetime={post.data.date.toISOString()} data-pagefind-meta="date">{formatDate(post.data.date)}</time>
+              {post.data.updated && post.data.updated.getTime() !== post.data.date.getTime() && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span title="마지막 업데이트" class="text-accent">업데이트 {formatDate(post.data.updated)}</span>
+                </>
+              )}
               <span aria-hidden>·</span>
               <span>{minutes}분 읽기</span>
               <div class="ml-auto flex items-center gap-3">
@@ -146,7 +163,7 @@ const jsonLd = JSON.stringify({
         )}
 
         <!-- comments -->
-        <Giscus client:visible />
+        <Giscus />
       </div>
 
       <!-- toc rail -->

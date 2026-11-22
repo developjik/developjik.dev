@@ -4,25 +4,112 @@ import { getAllPosts, tagCounts, tagSlug } from '~/lib/posts';
 
 const posts = await getAllPosts();
 const tags = tagCounts(posts);
+
+// 2026-11 태그 체계 정립: 307개 자유 태그를 45개 캐노니컬 토큰으로 통합.
+// 인덱스는 주제 6그룹으로 묶어 칩+카운트로 제시(균질 카드 그리드 폐지).
+const GROUPS: Array<{ label: string; tags: string[] }> = [
+  { label: 'AI · 에이전트', tags: ['AI', 'LLM', '에이전트', 'MCP', 'RAG', '온디바이스 AI', 'WebGPU'] },
+  { label: '프론트엔드', tags: ['프론트엔드', 'React', 'Next.js', '상태관리', 'CSS', 'HTML', '웹 플랫폼', '브라우저', '웹 컴포넌트', 'Svelte', 'PWA'] },
+  { label: '언어 · 런타임', tags: ['TypeScript', 'JavaScript', 'Node.js', 'Rust', 'Python'] },
+  { label: '품질 · 운영', tags: ['성능', '테스트', '품질', '접근성', '보안', '아키텍처', '운영', '관측성', 'CI/CD'] },
+  { label: '인프라 · 도구', tags: ['AWS', '서버리스', 'Docker', 'Git', 'DX', 'Astro', 'Vite'] },
+  { label: '커리어 · 기록', tags: ['회고', '커리어', '이직', '오픈소스', '블로그'] },
+];
+const known = new Set(GROUPS.flatMap((g) => g.tags));
+const grouped = GROUPS.map((g) => ({
+  ...g,
+  items: g.tags
+    .map((t) => [t, tags.find(([tt]) => tt === t)?.[1] ?? 0] as [string, number])
+    .filter(([, c]) => c > 0),
+}));
+const etc = tags.filter(([t]) => !known.has(t));
+const total = tags.reduce((a, [, c]) => a + c, 0);
 ---
 
-<BaseLayout title="태그" description="developjik 블로그의 모든 태그 — 주제별로 글 탐색하기.">
+<BaseLayout title="태그" description="developjik 블로그의 태그 인덱스 — 주제 6그룹으로 글 탐색하기.">
   <div class="shell py-14 md:py-20">
-    <header class="mb-12" data-reveal>
+    <header class="mb-10" data-reveal>
       <p class="kicker mb-3">Tags</p>
       <h1 class="font-display text-4xl font-bold tracking-tight md:text-5xl">태그</h1>
       <p class="mt-4 max-w-lg text-[0.95rem] leading-relaxed text-soft">
-        전체 <span class="tabular font-mono text-accent">{tags.length}</span>개 태그. 글의 개수가 많은 순서입니다.
+        <span class="tabular font-mono text-accent">{total}</span>개 태그 붙임 ·
+        <span class="tabular font-mono text-accent">{tags.length}</span>개 토큰 — 주제 그룹으로 탐색하세요.
       </p>
+      <div class="mt-7 max-w-sm">
+        <input
+          id="tag-filter"
+          type="search"
+          placeholder="태그 필터…"
+          autocomplete="off"
+          class="w-full border border-line bg-surface px-4 py-2.5 font-mono text-sm text-ink placeholder:text-faint focus:border-accent focus:outline-none"
+          aria-label="태그 필터"
+        />
+        <p id="tag-filter-empty" class="mt-2 hidden font-mono text-xs text-faint">일치하는 태그가 없습니다.</p>
+      </div>
     </header>
 
-    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-reveal>
-      {tags.map(([tag, count]) => (
-        <a href={'/tags/' + tagSlug(tag)} class="card card-hover group flex items-center justify-between gap-3 px-5 py-4">
-          <span class="truncate font-[550] transition-colors group-hover:text-accent">#{tag}</span>
-          <span class="font-mono text-xs text-faint tabular">{count}</span>
-        </a>
+    <div class="space-y-10" data-reveal>
+      {grouped.map((g) => g.items.length > 0 && (
+        <section data-tag-group={g.label}>
+          <div class="mb-3.5 flex items-baseline justify-between border-b border-line pb-2">
+            <h2 class="font-mono text-[0.72rem] font-semibold tracking-[0.18em] text-soft uppercase">{g.label}</h2>
+            <p class="font-mono text-[0.68rem] text-faint tabular">{g.items.length}</p>
+          </div>
+          <ul class="flex flex-wrap gap-2">
+            {g.items.map(([tag, count]) => (
+              <li data-tag-name={tag.toLowerCase()}>
+                <a href={'/tags/' + tagSlug(tag)} class="chip !px-3.5 !py-1.5 !text-xs">
+                  {tag} <span class="text-faint tabular">{count}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
       ))}
+
+      {etc.length > 0 && (
+        <section data-tag-group="기타">
+          <div class="mb-3.5 flex items-baseline justify-between border-b border-line pb-2">
+            <h2 class="font-mono text-[0.72rem] font-semibold tracking-[0.18em] text-soft uppercase">기타</h2>
+            <p class="font-mono text-[0.68rem] text-faint tabular">{etc.length}</p>
+          </div>
+          <ul class="flex flex-wrap gap-2">
+            {etc.map(([tag, count]) => (
+              <li data-tag-name={tag.toLowerCase()}>
+                <a href={'/tags/' + tagSlug(tag)} class="chip !px-3.5 !py-1.5 !text-xs">
+                  {tag} <span class="text-faint tabular">{count}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   </div>
+
+  <script>
+    function initTagFilter() {
+      const input = document.getElementById('tag-filter') as HTMLInputElement | null;
+      if (!input || input.dataset.init === '1') return;
+      input.dataset.init = '1';
+      const emptyMsg = document.getElementById('tag-filter-empty');
+      const apply = () => {
+        const q = input.value.trim().toLowerCase();
+        let visible = 0;
+        document.querySelectorAll<HTMLElement>('[data-tag-name]').forEach((li) => {
+          const show = !q || (li.dataset.tagName ?? '').includes(q);
+          li.style.display = show ? '' : 'none';
+          if (show) visible++;
+        });
+        document.querySelectorAll<HTMLElement>('[data-tag-group]').forEach((sec) => {
+          const any = [...sec.querySelectorAll('[data-tag-name]')].some((li) => (li as HTMLElement).style.display !== 'none');
+          sec.style.display = any ? '' : 'none';
+        });
+        emptyMsg?.classList.toggle('hidden', visible > 0);
+      };
+      input.addEventListener('input', apply);
+    }
+    document.addEventListener('astro:page-load', initTagFilter);
+    initTagFilter();
+  </script>
 </BaseLayout>

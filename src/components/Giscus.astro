@@ -1,0 +1,66 @@
+---
+/**
+ * Giscus — 바닐라 웹컴포넌트 버전 (reset v3 이후 React 제거)
+ * 환경변수(PUBLIC_ENABLE_COMMENTS + PUBLIC_GISCUS_REPO_ID + PUBLIC_GISCUS_CATEGORY_ID)가
+ * 모두 설정된 경우에만 giscus.app 스크립트를 주입한다. 미설정 시 마크업도 렌더링하지 않는다
+ * (빈 껍데기 아일랜드/리액트 런타임 184KB가 남던 문제 해소).
+ * data-loading="lazy"로 뷰포트 근처 접근 시에만 iframe이 뜬다.
+ */
+const enabled = import.meta.env.PUBLIC_ENABLE_COMMENTS === 'true';
+const repo = import.meta.env.PUBLIC_GISCUS_REPO ?? 'developjik/developjik.dev';
+const repoId = import.meta.env.PUBLIC_GISCUS_REPO_ID;
+const categoryId = import.meta.env.PUBLIC_GISCUS_CATEGORY_ID;
+const active = enabled && repoId && categoryId;
+---
+
+{active && (
+  <section class="no-print mt-14" aria-label="댓글">
+    <h2 class="font-mono text-xs tracking-[0.16em] text-faint uppercase mb-6">Comments</h2>
+    <div
+      id="giscus-host"
+      data-giscus-repo={repo}
+      data-giscus-repo-id={repoId}
+      data-giscus-category-id={categoryId}
+    ></div>
+    <script>
+      function mountGiscus() {
+        const host = document.getElementById('giscus-host');
+        if (!host || host.dataset.mounted === '1') return;
+        host.dataset.mounted = '1';
+        const theme = () =>
+          document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        s.setAttribute('data-repo', host.dataset.giscusRepo ?? '');
+        s.setAttribute('data-repo-id', host.dataset.giscusRepoId ?? '');
+        s.setAttribute('data-category', 'Announcements');
+        s.setAttribute('data-category-id', host.dataset.giscusCategoryId ?? '');
+        s.setAttribute('data-mapping', 'pathname');
+        s.setAttribute('data-strict', '1');
+        s.setAttribute('data-reactions-enabled', '1');
+        s.setAttribute('data-emit-metadata', '0');
+        s.setAttribute('data-input-position', 'top');
+        s.setAttribute('data-theme', theme());
+        s.setAttribute('data-lang', 'ko');
+        s.setAttribute('data-loading', 'lazy');
+        host.appendChild(s);
+
+        // 사이트 테마 토글을 giscus iframe에 전파
+        document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const iframe = document.querySelector<HTMLIFrameElement>('iframe.giscus-frame');
+            iframe?.contentWindow?.postMessage(
+              { giscus: { setConfig: { theme: theme() } } },
+              'https://giscus.app',
+            );
+          });
+        });
+      }
+      document.addEventListener('astro:page-load', mountGiscus);
+      mountGiscus();
+    </script>
+  </section>
+)}
