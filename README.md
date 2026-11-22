@@ -1,6 +1,10 @@
 # developjik.dev — 에이전트 시대의 프론트엔드 블로그
 
 Astro 5 + Tailwind CSS 4 + MDX로 구축된 정적 개발자 블로그.
+
+> **📍 블로그 주소** — <https://developjik-nextra-blog.vercel.app>
+> `developjik.dev` 커스텀 도메인은 현재 보유·연결되어 있지 않습니다(2026-11-22 확인, DNS 미해석).
+> 도메인을 구매·연결하기 전까지 위 Vercel 주소가 공식 주소이며, `astro.config.mjs`의 `site`·canonical도 이 주소를 기준으로 유지합니다.
 GitHub 프로필과 통일된 브랜드(#0e1116 / #4d8dff), Pretendard + Space Grotesk + JetBrains Mono 타이포그래피.
 
 ## 스택
