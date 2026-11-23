@@ -95,6 +95,15 @@ export const SERIES: Record<string, SeriesInfo> = {
       '블로그 마이그레이션, spec-studio, 검색 엔진, 에이전트 데스크, 데이터 리포까지 — 실제로 배포한 사이드 프로젝트를 만들며 배운 것들의 구축 로그.',
     accent: '#8fbf6a',
   },
+  'local-first-ai': {
+    id: 'local-first-ai',
+    title: '로컬 우선 AI 엔지니어링',
+    short: 'Local-first AI',
+    description:
+      '진실의 원천을 어디에 두고, 상태를 누가 소유하고, 품질을 무엇으로 판정할 것인가 — Damon·spec-studio·sqlite-graph-mcp를 만들며 코드와 측정값으로만 정리한 세 원칙과, 임베딩 대신 결정적 그래프를 고른 검색 설계의 기록.',
+    accent: '#a8557a',
+    goal: 2,
+  },
 }
 
 export function seriesIdOf(slug: string): string | undefined {

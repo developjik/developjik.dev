@@ -1,0 +1,452 @@
+---
+title: '왜 코드·스펙 에이전트에서 임베딩과 벡터DB를 버렸는가 — 재귀 CTE·suspect 컬럼·FTS5 trigram으로 바꾼 검색 설계'
+date: '2026-11-23'
+description: '1편에서 "의미 검색의 유연성을 포기했다"고 한 줄로 적은 선택을 코드로 풀었습니다. top-k에는 경계가 없고 유사도에는 방향이 없으며 "없음"은 검색으로 증명할 수 없다는 세 가지에서 출발해, sqlite-graph-mcp의 재귀 CTE와 `diff --check` exit 3, spec-studio의 suspect 컬럼과 타입별 고립 정의, damon-agent-core의 FTS5 trigram과 한글 2글자 LIKE 우회까지. 잃은 것과 하이브리드로 넘어가는 기준도 함께 적었습니다.'
+tags: ['AI', '아키텍처', 'Rust', 'TypeScript', '에이전트']
+series: 'local-first-ai'
+seriesPart: 2
+---
+
+# 왜 코드·스펙 에이전트에서 임베딩과 벡터DB를 버렸는가 — 재귀 CTE·suspect 컬럼·FTS5 trigram으로 바꾼 검색 설계
+
+**시리즈** · 1편 [클라우드 서버 없이 브라우저가 로컬 Rust 데몬과 직접 대화하는 이유](/posts/local-first-ai-engineering) · 2편 (이 글)
+
+"벡터를 버렸다"는 말은 정확하지 않다. 나는 벡터 검색을 여전히 쓴다. 버린 건 기술이 아니라 **질문의 종류**다.
+
+내가 코딩 에이전트에게 실제로 시키는 질문을 세 개 적어 보면, 셋 다 코사인 유사도로 표현되지 않는다.
+
+> **세 질문**
+>
+> 1. `AuthClient`를 바꾸면 어디가 깨지는가 — **도달성**(reachability)
+> 2. 이 심볼에서 이 테이블까지 최단 경로는 — **경로**(path)
+> 3. 아무도 import하지 않는 파일은 — **집합 차**(set difference)
+
+세 질문 모두 답이 **집합**이고, 그 집합에는 경계가 있다. 유사도 검색은 순위를 주고 경계를 주지 않는다. 아래는 그 차이가 실제로 어디서 갈라지는지, 그리고 갈라진 뒤에 무엇을 잃었는지의 기록이다.
+
+---
+
+## 1. 유사도로 표현되지 않는 것
+
+### 1.1 top-k에는 경계가 없다
+
+"A를 바꾸면 어디가 깨지는가"의 답은 "A를 참조하는 파일 전부"다. 전부라는 단어가 핵심이다. 도달 가능한 노드 집합은 임계값 하나로 잘리지 않는다.
+
+벡터 검색은 여기서 k개를 돌려준다. 0.78 이상 같은 임계값을 두면 그 숫자는 내가 만든 것이고, 코드가 바뀌면 같은 숫자가 다른 것을 자른다. k=10이면 11번째 참조 파일은 조용히 사라진다. **빠진 것을 알려주는 신호가 없다.** 1편에서 말한 "실패가 조용하다"가 여기서도 그대로다.
+
+### 1.2 유사도에는 방향이 없다
+
+A와 B가 가깝다는 명제와 A에서 B까지 3홉이라는 명제는 다르다. 앞은 대칭이고, 뒤는 비대칭이다. `imports`는 방향이 있고 `references`도 방향이 있다. 코사인은 이 방향을 표현할 방법이 없다. 경로를 물으면 "A와 B 사이에 있는 것처럼 보이는 문서"가 돌아오고, 그 문서는 경로의 일부가 아니다.
+
+### 1.3 "없음"은 검색으로 증명할 수 없다
+
+"아무도 import하지 않는 파일"은 검색 질문이 아니라 **전체 집합에 대한 질문**이다. top-k는 언제나 k개를 준다. 존재하지 않는 것을 물으면 비슷한 것을 채워서 준다. 0건을 돌려주는 검색은 실패로 보이지만, 고립 노드 질문에서 0건은 정답일 수 있다.
+
+> **질문이 바뀌면 표현도 바뀐다**
+>
+> - "결제 로직이 어디 있어" → 유사도(어휘가 다를 수 있으니 임베딩이 유리)
+> - "결제 모듈을 바꾸면 어디가 깨져" → 도달성(그래프)
+> - "결제를 아무도 안 쓰는 곳은" → 집합 차(그래프)
+>
+> 세 문장이 한 문단에 있어도 답하는 기계는 달라야 한다.
+
+여기에 1편에서 정리한 세 가지가 겹친다. 임베딩 인덱스는 **결정적이지 않고**(같은 코드·다른 청크·다른 답), **청크 경계가 구조를 자르고**(import 간선은 파일과 심볼 사이에 있는데 청크는 그 사이를 임의로 긋는다), **답에 좌표가 없다**. 세 번째가 실무에서 가장 비싸다. 좌표 없는 답은 검증 비용이 생성 비용보다 큰 답이다.
+
+---
+
+## 2. 질문을 SQL로 옮긴다 — sqlite-graph-mcp
+
+선택은 단순했다. 인덱스 시점에 그래프를 확정하고, 질문은 SQL로 답한다. 노드는 4종(`file`, `symbol`, `heading`, `package`), 간선은 6종(`imports`, `exports`, `defines`, `links_to`, `depends_on`, `references`)이다.
+
+인용은 기능이 아니라 스키마의 결과다.
+
+```javascript
+export function toNodeView(node: GraphNode, depth?: number): NodeView {
+  const view: NodeView = {
+    ...node,
+    citation: node.path ? `${node.path}${node.line ? `:${node.line}` : ''}` : null,
+    snippet: snippet(node.content),
+  };
+  if (depth !== undefined) view.depth = depth;
+  return view;
+}
+```
+
+citation이 null인 노드는 `package` 하나뿐이다. 파일이 아니라 의존성 이름이라 좌표가 존재할 수 없다. 나머지 모든 답에는 `file:line`이 붙는다.
+
+### 2.1 impact는 도구가 아니라 방향이다
+
+그래프의 순회는 재귀 CTE 하나다.
+
+```sql
+WITH RECURSIVE walk(id, depth, path) AS (
+  SELECT id, 0, ',' || id || ',' FROM nodes WHERE id IN (?, ?)
+  UNION ALL
+  SELECT e.dst, w.depth + 1, w.path || e.dst || ','
+  FROM walk w
+  JOIN edges e ON e.src = w.id
+  WHERE w.depth < ?                              -- maxDepth (기본 6, 최대 20)
+    AND instr(w.path, ',' || e.dst || ',') = 0   -- 사이클 차단
+    AND e.type IN (?, ?)                         -- 간선 타입 필터
+)
+SELECT id, MIN(depth) AS depth
+FROM walk
+GROUP BY id
+ORDER BY depth ASC, id ASC
+LIMIT ?;
+```
+
+사이클 차단에 visited 테이블을 쓰지 않은 이유는 재귀 CTE 안에서 추가 상태를 들고 다니지 않기 위해서다. 경로 문자열 하나로 `a → b → a`가 깊이 1에서 끝난다. `maxDepth`가 20이어도 그렇다.
+
+여기서 중요한 건 **도구를 늘리지 않았다**는 점이다. 처음에는 `impact`, `trace`를 별도 연산자로 두려고 했다. 만들다 보니 둘 다 같은 CTE에 방향과 간선 타입만 다른 질문이었다.
+
+| 질문 | 실제 호출 |
+| --- | --- |
+| A를 바꾸면 어디가 깨지는가 | `graph_walk start=[sym] edgeType=references direction=in` |
+| B까지 어떻게 닿는가 | `graph_walk direction=out depth=n` |
+| 이 둘 사이 전체 | `direction=both` |
+
+도구 이름을 늘리는 대신 파라미터를 늘렸다. 연산자는 다섯 개다. `find`(텍스트), `walk`(순회), `filter`(집합 위 조건), `minus`(집합 차), `answer`(파이프라인 합성 + 인용 묶음). MCP 도구로는 `graph_index`, `graph_find`, `graph_walk`, `graph_filter`, `graph_orphans`, `graph_plan`, `graph_diff` 일곱 개가 된다. **`graph_impact`라는 이름의 도구는 없다.** impact는 walk의 방향이고, trace는 walk의 깊이다.
+
+실제 응답은 이렇게 생겼다.
+
+```jsonc
+// graph_walk { "start": ["symbol:src/graph/walker.ts#walkGraph"],
+//              "edgeType": "references", "direction": "in" }
+{
+  "count": 3,
+  "nodes": [
+    { "key": "symbol:src/graph/walker.ts#walkGraph", "depth": 0, "citation": "src/graph/walker.ts:7" },
+    { "key": "file:src/index.ts",                    "depth": 1, "citation": "src/index.ts:9" },
+    { "key": "file:src/graph/walker.test.ts",        "depth": 1, "citation": "src/graph/walker.test.ts:6" }
+  ]
+}
+```
+
+citation이 import 줄이 아니라 **사용 줄**이라는 점을 보자. `references` 간선은 파일이 그 심볼을 실제로 쓰는 첫 줄을 가리킨다. import만 하고 안 쓰는 바인딩은 import 줄을 인용한다. 그 절 자체가 rename에 민감한 언급이기 때문이다.
+
+### 2.2 find는 두 엔진을 합친다 — 그래도 결정적이다
+
+의미 검색을 포기한 대가는 어휘 검색으로 버티는 것이다. 버티는 방식이 순진하지는 않다. FTS5 prefix 랭킹과 LIKE 부분 문자열 스캔을 함께 돌리고, 점수를 합쳐 정렬한다.
+
+```javascript
+// 1) FTS5 prefix 랭킹
+`SELECT rowid AS id FROM nodes_fts WHERE nodes_fts MATCH ? ORDER BY rank LIMIT ?`
+// 2) 부분 문자열 폴백: "index"가 GraphIndexer를 찾게 하는 쪽
+`SELECT * FROM nodes WHERE (name LIKE ? OR path LIKE ? OR terms LIKE ? OR content LIKE ?)`
+
+let score: number;
+if (nameLower === queryLower) score = 0;              // 정확히 같은 이름
+else if (nameLower.startsWith(queryLower)) score = 1; // 접두
+else if (nameLower.includes(queryLower)) score = 2;   // 포함
+else if ((node.path ?? '').toLowerCase().includes(queryLower)) score = 3; // 경로에
+else score = 4;                                        // 본문에만
+```
+
+FTS5 토크나이저는 `unicode61`에 `tokenchars '_.$#@-'`를 얹었다. `walkGraph`, `auth.client.ts`, `@developjik/sqlite-graph-mcp`가 한 토큰으로 남게 하려는 것이다. 기본 토크나이저로는 이 중 상당수가 쪼개져서 prefix 검색이 어긋난다.
+
+점수 체계가 0~4의 서수라는 게 핵심이다. 코사인 0.83과 0.79 사이의 차이에는 의미가 없지만, "이름이 정확히 같다"와 "본문 어딘가에 있다"의 차이에는 의미가 있다. 그리고 이 차이는 **테스트로 고정할 수 있다**. 같은 질의에 같은 순서가 나오기 때문이다.
+
+### 2.3 minus는 NOT EXISTS다
+
+"아무도 안 쓰는 파일"은 집합 차로 답한다. 조인도, 순회도 필요 없다.
+
+```sql
+SELECT * FROM nodes n
+WHERE n.kind = 'file'
+  AND n.tags NOT LIKE '%"manifest"%'
+  AND NOT EXISTS (
+    SELECT 1 FROM edges e
+    WHERE e.dst = n.id AND e.src <> n.id AND e.type IN ('imports','links_to')
+  )
+  AND n.tags NOT LIKE '%"entry"%'   -- includeEntries일 때 제거
+  AND n.tags NOT LIKE '%"test"%'    -- includeTests일 때 제거
+```
+
+태그가 필터의 재료가 된다. `entry`, `test`, `manifest`는 파일 성격이고, 성격은 인덱서가 붙인다. "테스트 파일 빼고"를 호출자가 매번 조건으로 쓰지 않아도 되는 이유다.
+
+심볼 쪽은 한 줄이 더 필요하다. `exports` 간선을 **받지 못한** 심볼이 죽은 코드 후보다. 즉 이 질문은 "가장자리가 있는가"가 아니라 **특정 타입의 가장자리가 없는가**를 묻는다. 유사도로는 형태 자체가 표현되지 않는 질문이다.
+
+### 2.4 인덱스는 한 트랜잭션, 스키마는 스스로 버린다
+
+```javascript
+store.transaction(() => {
+  store.clear();        // nodes 삭제 → edges/FTS는 CASCADE
+  // ... 파일 파싱 및 적재
+});
+```
+
+중간에 실패하면 이전 인덱스가 그대로 남는다. 그래프는 파생 데이터라서 언제든 다시 만들 수 있고, 그래서 반쯤 만들어진 인덱스를 남기는 것보다 안 만드는 게 낫다.
+
+스키마 버전이 다르면 묻지 않고 버린다. `schema_version`이 현재 값과 다르면 `nodes_fts`, `edges`, `nodes`, `graph_meta`를 DROP하고 다시 만든다. 마이그레이션 코드를 쓰지 않는 대신, **인덱스가 낡았을 수 있는 상태를 존재하지 않게** 했다. 파생 데이터에 마이그레이션을 붙이는 건 원본에 붙이는 것보다 위험하다.
+
+파일 수 상한은 기본 5,000이다. 넘으면 `skippedFiles`로 보고한다. 조용히 자르지 않는다.
+
+### 2.5 파싱은 tree-sitter, 실패하면 정직하게 폴백
+
+`references` 간선은 정규식으로 만들면 정확도가 무너진다. 별칭 import, 타입 위치에서만 쓰는 import, barrel re-export, `export *` — 전부 이름만 보고는 판단이 안 된다. 그래서 기본 엔진이 tree-sitter WASM 파스다.
+
+- 문법 파일 두 개(`tree-sitter-typescript.wasm`, `tree-sitter-tsx.wasm`)를 패키지에 넣었다. 네이티브 빌드도, 네트워크도 필요 없다.
+- WASM이 로드되지 않으면 정규식 엔진으로 폴백하고, 인덱스 리포트의 `stats.engine`이 어느 쪽이 돌았는지 말한다. 조용히 품질이 떨어지지 않는다.
+- Emscripten 모듈 로드가 간헐적으로 실패하는 문제가 있어 몇 번 재시도한다. 재시도로 해결되는 것은 문법 문제가 아니라 런타임 문제라는 구분을 코드 주석에 남겼다.
+
+이 엔진으로도 잡지 못하는 것이 있다. 전체 스코프 분석은 하지 않는다. 그래서 이름이 같은 지역 변수(shadowing)를 사용으로 셀 수 있다. 이 한계는 CHANGELOG에 그대로 적혀 있다. **한계를 README의 미래 계획이 아니라 변경 기록에 적는 이유는, 그 문장이 릴리스 시점에 참이었다는 것을 남기기 위해서다.**
+
+### 2.6 리뷰 게이트 — diff와 종료 코드
+
+`graph_diff`는 두 리비전의 그래프를 각각 인덱싱해서 비교한다. base와 head는 브랜치·태그·SHA(`git rev-parse`로 검증, 셸 없이 `git archive`로 물질화) 또는 디렉터리 경로다.
+
+breaking의 정의가 이 도구의 전부다.
+
+```javascript
+// head에서 사라졌거나, 더 이상 export되지 않는 심볼
+const exportedInBase = edgeRows(base, 'in', key).some((r) => r.type === 'exports');
+const exportedInHead = edgeRows(head, 'in', node.key).some((r) => r.type === 'exports');
+if (exportedInBase && !exportedInHead) candidates.add(node.key);
+
+// base에서 그 심볼을 실제로 참조하던 파일들 + 인용 줄
+const refs = edgeRows(base, 'in', key).filter((r) => r.type === 'references');
+if (refs.length === 0) continue;   // 아무도 안 썼으면 breaking이 아니다
+```
+
+"이 PR 머지해도 되나"에 사람의 기억이 아니라 그래프 차분이 답한다. CLI에서는 이렇게 쓴다.
+
+```bash
+sqlite-graph-mcp diff main HEAD --check   # breaking이 하나라도 있으면 exit 3
+```
+
+종료 코드 3이 중요하다. 리뷰 코멘트는 무시될 수 있지만 CI의 빨간불은 무시되지 않는다. 판정을 사람의 주의력이 아니라 파이프라인의 조건으로 옮긴 것이다.
+
+---
+
+## 3. 스펙도 같은 모양이다 — spec-studio
+
+한국어 화면 기획서는 이미 그래프다. 요소마다 번호가 있고, 문단이 그 번호를 인용하고, 정책·예외·QA가 번호에 매달린다. 문제는 그 그래프가 문서 편집기 안에 흩어져 있다는 것이다. spec-studio는 그것을 SQLite의 두 테이블로 옮겼다.
+
+- v1의 객체 6종: 화면 · 핀 · 요구사항(req) · 정책(policy) · 계약(contract) · QA(qa)
+- v1의 링크 7종: `implements` · `governs` · `handles_edge` · `verifies` · `references` · `derived_from` · `blocks`
+
+(테이블은 더 넓다. `goal`, `insight`, `idea`, `evidence`까지 9종의 kind를 담고, `link_type` 레지스트리는 13행이다. v1 화면에 노출되는 것이 6종·7종이다.)
+
+```sql
+CREATE TABLE link (
+  id            TEXT PRIMARY KEY,
+  type          TEXT NOT NULL REFERENCES link_type(id),
+  src           TEXT NOT NULL REFERENCES obj(id) ON DELETE RESTRICT,
+  dst           TEXT NOT NULL REFERENCES obj(id) ON DELETE RESTRICT,
+  suspect_since TEXT,
+  suspect_why   TEXT,
+  suspect_rev   INTEGER,
+  acked_by      TEXT,
+  acked_at      TEXT,
+  created_at    TEXT NOT NULL,
+  CHECK (src <> dst)
+);
+CREATE UNIQUE INDEX link_once ON link(type, src, dst);
+CREATE INDEX link_src  ON link(src, type);
+CREATE INDEX link_dst  ON link(dst, suspect_since);
+```
+
+### 3.1 링크는 점수가 아니라 주장이다
+
+임베딩 그래프와 결정적 그래프의 차이는 여기서 가장 선명해진다. 임베딩에서 두 노드 사이의 관계는 **계산 결과**다. 문서가 바뀌면 다시 계산되고, 점수가 조용히 달라진다. 링크 테이블에서 관계는 **저장된 행**이다. 끝점의 내용이 바뀌어도 링크는 사라지지 않고, 대신 질문을 얻는다.
+
+```javascript
+// A link whose endpoint moved on keeps its identity and gains a question.
+export function markLinksSuspect(links, nodeId, why, at) {
+  return links.map((link) =>
+    link.src === nodeId || link.dst === nodeId
+      ? { ...link, suspectSince: at, suspectWhy: why }
+      : link,
+  );
+}
+```
+
+`suspect_since`, `suspect_why`, `suspect_rev` 세 컬럼이 남는다. 위치 이동은 suspect를 만들지 않는다. 문장이 주장하는 것은 위치가 아니기 때문이다. 반면 핀의 type/title/body 해시가 바뀌면 그 핀을 인용한 링크가 suspect가 된다.
+
+임베딩으로 같은 일을 하면 어떻게 되는가. 핀이 바뀌면 인용 문단의 벡터가 다시 계산되고, 유사도가 0.74에서 0.71로 내려간다. **내려갔다는 사실은 남지만, 무엇이 왜 의심스러운지는 남지 않는다.** 사람이 확인할 대상이 "0.71"이 되면 확인은 일어나지 않는다.
+
+### 3.2 고립은 타입마다 정의가 다르다
+
+`traceability()`는 링크 목록에서 고립을 계산한다. 여기서 배울 점은 **"이유가 적히지 않은 노드"의 정의가 객체 타입마다 다르다**는 것이다.
+
+```javascript
+const orphanNodes = project.graph.nodes.filter((node) => {
+  switch (node.type) {
+    case 'req':      // 구현되거나 예외를 처리해야 한다
+      return !inbound.implements.has(node.id) && !inbound.handles_edge.has(node.id);
+    case 'policy':   // 무언가를 규율하거나, 무언가에서 도출돼야 한다
+      return !outbound.governs.has(node.id)
+          && !outbound.derived_from.has(node.id)
+          && !inbound.derived_from.has(node.id);
+    case 'qa':       // 검증하지 않는 QA는 아무것도 증명하지 않는다
+      return !outbound.verifies.has(node.id);
+    case 'contract': // 어디에도 닿지 않으면 계약이 아니다
+      return !touched.has(node.id);
+    default: return false;
+  }
+});
+```
+
+이 조건들은 유사도로 근사할 수 없다. "요구사항이 구현되었는가"는 의미적 판단처럼 보이지만, 이 시스템에서 그것은 `implements` 간선의 존재 여부다. 의미 판단을 사람이 한 번 하고(**이 핀이 이 요구사항을 구현한다**), 그 판단을 행으로 저장하고, 이후의 질문은 저장된 판단 위에서 결정적으로 답한다. 임베딩은 이 분업을 없앤다. 판단과 계산을 같은 단계에 섞어 버린다.
+
+커버리지는 그 집합의 비율이다.
+
+```javascript
+coverage: pins === 0 ? 0 : Math.round(((pins - orphanPins.length) / pins) * 1000) / 1000
+```
+
+0.723 같은 숫자가 화면에 뜨고, 그 숫자는 핀 목록에서 다시 셀 수 있다. 요약이 아니라 셈이다.
+
+### 3.3 여기서 아직 안 한 것
+
+스펙 본문 검색은 아직 결정적이지 않다. 스키마에는 검색 인덱스가 정의되어 있다. FTS5 `trigram` 테이블(`search`)과 한국어 음절 바이그램 토큰 열(`search_bi`), 그리고 청크 매핑 테이블(`search_chunk`)이다. 하지만 앱의 검색 경로는 아직 그 테이블을 쓰지 않는다. 계약 시험은 `sqlite_master`의 객체 88개를 단언하지만, 88개 중 두 개는 아직 소비자가 없는 테이블이다.
+
+이걸 숨기지 않고 적는 이유는 순서가 중요하기 때문이다. **스키마가 먼저 있고 소비자가 나중에 붙는 것과, 기능이 있는 척하는 것은 다르다.** 전자는 준비이고 후자는 부채다. 구분은 "이 테이블을 읽는 코드가 있는가"라는 질문 하나로 끝난다.
+
+---
+
+## 4. 세션 히스토리도 같은 선택 — damon-agent-core
+
+에이전트 대화 기록 검색은 더 노골적인 사례다. 여기서 임베딩을 쓰면 모델 파일, GPU 또는 원격 API, 키 관리, 그리고 첫 검색 전에 인덱싱 대기가 붙는다. 데몬이 로컬에서 즉시 뜨는 것이 목표인 제품에서 이건 기능이 아니라 설치 장벽이다. 선택은 FTS5였다. 단, 기본 토크나이저가 아니다.
+
+```sql
+-- trigram: the default unicode61 tokenizer folds a run
+-- of CJK characters into ONE token, so a substring
+-- query like 커밋 could never match 커밋 메시지.
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+    content,
+    session_id UNINDEXED,
+    message_id UNINDEXED,
+    tokenize = 'trigram'
+);
+```
+
+이건 추측이 아니라 실제로 겪은 버그다. `unicode61`은 한글 연속 구간을 하나의 토큰으로 접는다. 그래서 "커밋"으로 "커밋 메시지를 남겼다"를 찾지 못한다. trigram 토크나이저는 문자 3개 창을 전부 색인해서 MATCH를 부분 문자열 검색으로 바꾼다.
+
+문제는 토크나이저가 shadow 인덱스에 박혀 있다는 것이다. 그래서 마이그레이션이 이렇게 생겼다.
+
+```sql
+DROP TABLE IF EXISTS messages_fts;
+CREATE VIRTUAL TABLE messages_fts USING fts5(..., tokenize = 'trigram');
+-- 전체 메시지 재색인 (멱등: 이미 색인된 행은 NOT IN 필터로 건너뜀)
+-- user_version은 맨 마지막에만 올린다
+```
+
+중간에 죽어도 다음 실행이 같은 일을 다시 한다. 색인 재구축이 멱등이면 마이그레이션은 재시도 가능해지고, 재시도 가능한 마이그레이션은 실패해도 안전하다.
+
+### 4.1 trigram의 구멍을 코드가 메운다
+
+trigram은 3자 미만 토큰을 색인하지 않는다. "커밋"은 2자다. 그대로 MATCH에 넣으면 SQLite가 조용히 버리고, 사용자는 0건을 본다. 그래서 쿼리를 두 갈래로 쪼갠다.
+
+```rust
+struct FtsQuery {
+    match_expr: String,        // 3자 이상: FTS5 MATCH (rank, snippet 사용)
+    like_terms: Vec<String>,   // 1~2자: content LIKE '%term%' conjunct
+    like_not_terms: Vec<String>,
+}
+```
+
+- 3자 이상은 MATCH 경로에 남는다. **rank와 snippet이 살아 있다.**
+- 1~2자는 정확한 부분 문자열 conjunct가 된다. MATCH가 없으므로 rank도 없고, 그래서 최신순으로 돌려주고 스니펫은 Rust에서 만든다.
+- 짧은 토큰에 걸린 `OR`은 `AND`로 좁힌다. 적게 나올 뿐 틀리게 나오지는 않는 쪽을 골랐다.
+
+그리고 사용자 입력은 절대 FTS5 파서로 그대로 가지 않는다. 인용부호 구간은 phrase가 되고, 맨 `AND`/`OR`/`NOT`만 연산자로 통과하며, 나머지는 전부 quoted phrase가 된다. `*`, `NEAR(...)`, `col:value`는 문자 그대로가 된다. 이 처리가 없으면 평범한 입력 하나가 500을 만든다. 검색어 하나에 서버가 죽는 건 보안 문제이기 이전에 신뢰 문제다.
+
+파일은 `0600`, 디렉터리는 `0700`, WAL. 대화 기록은 사용자의 것이고, 그 파일을 읽을 수 있는 프로세스는 사용자와 데몬뿐이어야 한다.
+
+---
+
+## 5. 내가 포기한 것
+
+이 절이 이 글의 값이다. 결정론적 검색은 공짜가 아니다.
+
+### 5.1 어휘 격차 — 가장 큰 손실
+
+"결제 관련 이상한 로직 찾아줘"는 내 도구가 못 한다. FTS5도 0건, LIKE도 0건이다. **질문의 어휘가 코드에 없기 때문이다.** 이건 튜닝으로 안 된다. 동의어 사전을 넣으면 사전에 있는 것만 되고, 사전은 코드보다 느리게 자란다.
+
+임베딩이 실제로 이기는 지점이 정확히 여기다. 질문과 문서가 다른 어휘를 쓸 때, 그리고 정답의 경계가 모호할 때. 그런 질문은 **탐색**이고, 탐색에는 후보 목록이면 충분하다. 내가 답을 요구하는 질문과 섞지 않는 것이 요령이다.
+
+### 5.2 문자열은 문자열이다
+
+trigram은 문자 창이지 형태소 분석이 아니다. "결재"와 "결제"는 다른 문자열이고, 활용형과 오타는 넘지 못한다. 한국어 조사는 부분 문자열이라 대체로 걸리지만(커밋을/커밋이/커밋은 모두 "커밋"을 포함한다) 그것은 우연한 커버리지지 형태소 처리의 결과가 아니다. 이걸 형태소 분석으로 메우면 의존성이 하나 늘고, 그 의존성은 사전 갱신 주기를 갖는다. 지금은 그 비용을 내지 않기로 했다.
+
+### 5.3 정적 파스의 벽
+
+tree-sitter는 정적 파스다. 다음은 그래프에 없다.
+
+- 문자열로 고른 핸들러(`handlers[name]()`)
+- DI 컨테이너가 런타임에 조립하는 의존 관계
+- 프레임워크가 관례(convention)로 연결하는 라우트
+- `eval`이나 템플릿으로 만든 함수
+- 설정 파일에 적힌 문자열 경로
+
+동적 `import()`는 잡지만(`imports` 간선), 그 인자가 변수면 정적 값만 남는다. **참조는 이름이 코드에 적힌 만큼만 존재한다.** 리플렉션이 많은 코드베이스에서 이 도구의 커버리지는 실제보다 넓게 보인다. 그래서 `graph_orphans`의 결과를 "죽은 코드 확정"이 아니라 "후보"로 읽어야 한다.
+
+### 5.4 스냅샷은 낡는다
+
+인덱스는 파일이 바뀌어도 다시 돌리기 전까지 그대로다. 파일 감시자(watcher)가 없다. 낡은 citation은 **조용히 틀린 줄**을 가리킨다. 좌표가 있다는 것이 좌표가 맞다는 뜻은 아니다.
+
+이걸 감시자로 풀지 않은 이유는, 감시자는 항상 켜져 있어야 하고 항상 켜져 있는 것은 언젠가 꺼지기 때문이다. 대신 두 가지로 다뤘다. 인덱스 전체 재구축을 싸게 만들고(한 트랜잭션, 파일 상한 5,000), 리비전 사이의 차이를 `graph_diff`로 명시적으로 비교한다. 낡음은 피할 수 없으니 **낡음을 측정 가능한 사건**으로 만들었다.
+
+### 5.5 색인 비용
+
+trigram은 문자 3개 창을 전부 색인한다. 같은 텍스트를 unicode61로 색인할 때보다 인덱스가 커지고, 재구축은 전체 재색인이다. 지금 대화 기록 규모에서는 문제가 아니지만, 100만 메시지를 넘기면 이 선택을 다시 계산해야 한다. 그때도 임베딩으로 갈 가능성은 낮다. 벡터 인덱스도 그 규모에서는 메모리와 재색인 비용을 요구하니까, 비교 대상은 "벡터 대 FTS"가 아니라 "FTS 대 파일 grep"이 될 것이다.
+
+> **잃은 것** — 의미로 찾기, 동의어·오타 허용, 동적 연결 추적, 항상 최신인 인덱스, 작은 색인.
+>
+> **얻은 것** — 같은 질문에 같은 답, 답마다 좌표, 틀렸을 때 어디가 틀렸는지 셀 수 있음, 설치할 것이 파일 하나.
+
+---
+
+## 6. 어디서 하이브리드로 넘어가는가
+
+기준을 다섯 개로 줄였다. 다섯 개 중 두 개라도 "아니오"면 그래프를 고른다.
+
+| 판단 | 그래프가 맞다 | 임베딩이 맞다 |
+| --- | --- | --- |
+| 답이 집합인가, 순위인가 | 집합 (도달·차집합·경로) | 순위 (관련도 top-k) |
+| 답에 좌표가 필요한가 | 필요 (file:line, obj id) | 좌표 없이 요약으로 충분 |
+| 구조를 기계가 아는가 | 파스·스키마·링크 타입으로 명시됨 | 의미만 사람이 앎 (산문, 회의록) |
+| 질문 어휘가 데이터 어휘와 같은가 | 같거나 이름 일부를 앎 | 다름 (동의어·구어·오타) |
+| 틀렸을 때 조용한가 | 조용함 → 좌표와 종료 코드로 시끄럽게 | 시끄러움 → 사람이 바로 앎 |
+
+### 하이브리드의 규칙 하나
+
+둘을 같이 쓸 때 지켜야 하는 규칙은 하나다. **벡터 히트는 노드 id로 승격되기 전까지 답이 아니다.**
+
+```text
+질문 → [벡터 검색] 후보 텍스트 → 노드 id로 승격(anchor) → [그래프] walk/filter로 검증 → 좌표 있는 답
+```
+
+승격되지 않은 히트는 후보 목록이고, 후보 목록은 답이 아니다. 승격이 되면 그때부터는 결정적 연산의 입력이 된다. 이 구조의 장점은 임베딩을 **후보 생성기**로만 쓰고 판정은 그래프에 맡긴다는 것이다. 모델을 바꿔도 판정의 재현성은 유지된다.
+
+내 도구들에는 이 경로가 아직 없다. 정직하게 말하면, 지금 필요한 질문 중 벡터가 없어서 못 한 것은 5.1의 자연어 의도 검색 하나다. 그 하나를 위해 모델 파일과 인덱싱 대기를 기본 경로에 넣는 것은, 나머지 질문 전부의 비용을 올리는 거래다. 필요해지면 후보 생성기로만 붙인다. 판정은 옮기지 않는다.
+
+---
+
+## 7. 결정론은 정확성의 주장이 아니다
+
+이 글의 주장을 오해하지 않게 정리한다. 그래프가 임베딩보다 **정확하다**고 말하는 게 아니다. 의미 검색은 내가 그래프로 답할 수 없는 질문에 답한다. 다른 것을 재는 도구다.
+
+내가 주장하는 것은 **검증 가능성**이다. 같은 질문에 같은 답이 나오고, 답마다 좌표가 붙고, 틀렸을 때 어느 행이 틀렸는지 셀 수 있다. 이 세 가지가 있으면 도구를 개선할 수 있다. 없으면 프롬프트를 바꿔 가며 감으로 고친다.
+
+에이전트가 코드와 스펙에 대해 말할 때 필요한 것은 그럴듯함이 아니라 반박 가능성이다. "이 파일이 `walkGraph`를 정의하고 `index.ts`가 그것을 import한다"는 문장은 `src/graph/walker.ts:7`과 `src/index.ts:9`로 반박된다. 반박할 수 있는 문장만 고칠 수 있다.
+
+---
+
+## 숫자 요약
+
+| 무엇 | 값 |
+| --- | --- |
+| sqlite-graph-mcp | 노드 4종 · 간선 6종 · 연산자 5개 · MCP 도구 7개 · 소스 4,737줄 · 테스트 90여 개 |
+| sqlite-graph-mcp 한계값 | find 20/200 · walk depth 6/20 · walk limit 2,000/10,000 · answer 50/500 · files 5,000 |
+| 그래프 리뷰 게이트 | `diff --check` → breaking 시 exit 3 |
+| spec-studio | v1 객체 6종 · 링크 7종 · link_type 레지스트리 13행 · 계약 시험 sqlite_master 88객체 |
+| damon-agent-core | store.rs 4,649줄 · user_version 11 · FTS5 trigram · DB 0600 / 디렉터리 0700 |
+| 임베딩 의존성 | 모델 파일 0 · GPU 0 · API 키 0 · 도커 0 · 외부 서비스 0 |
+
+이 숫자는 전부 저장소에서 다시 셀 수 있는 값이다.
+
+- [sqlite-graph-mcp](https://www.npmjs.com/package/@developjik/sqlite-graph-mcp) — 재귀 CTE 5연산자 코드 그래프 MCP ([GitHub](https://github.com/developjik/sqlite-graph-mcp))
+- [spec-studio](https://developjik.github.io/spec-studio/) — 로컬 SQLite 단일 원천 기획 스튜디오, 6객체·7링크 추적 그래프 (라이브 데모)
+- [damon-agent-core](https://github.com/developjik/damon-agent-core) — Rust 상주 데몬, FTS5 trigram 세션 히스토리
