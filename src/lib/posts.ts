@@ -102,7 +102,7 @@ export const SERIES: Record<string, SeriesInfo> = {
     description:
       '진실의 원천을 어디에 두고, 상태를 누가 소유하고, 품질을 무엇으로 판정할 것인가 — Damon·spec-studio·sqlite-graph-mcp를 만들며 코드와 측정값으로만 정리한 세 원칙과, 임베딩 대신 결정적 그래프를 고른 검색 설계의 기록.',
     accent: '#a8557a',
-    // 1·2편 발행, 3편(프론트엔드·UI 검증) 예정
+    // 3편(프론트엔드·UI 검증) 발행 완료 — 2026-11-24 완결
     goal: 3,
   },
 }
